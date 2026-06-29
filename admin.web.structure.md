@@ -1,9 +1,4 @@
 admin-web
-├── dist
-│   ├── assets
-│   │   ├── index-Bi1FpSxr.css
-│   │   └── index-oFPvxzNs.js
-│   └── index.html
 ├── index.html
 ├── package-lock.json
 ├── package.json
@@ -48,6 +43,7 @@ admin-web
 │   │   │   └── components
 │   │   │       ├── BlockDataForm.tsx
 │   │   │       ├── BlockSectionCard.tsx
+│   │   │       ├── CreatePageModal.tsx
 │   │   │       ├── UnsavedChangesModal.tsx
 │   │   │       └── block-editors
 │   │   │           ├── FaqBlockEditor.tsx
