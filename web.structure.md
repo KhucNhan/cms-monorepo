@@ -1,27 +1,28 @@
 web
-├── index.html
+├── app
+│   ├── [slug]
+│   │   └── page.tsx
+│   ├── api
+│   │   └── revalidate
+│   │       └── route.ts
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── not-found.tsx
+│   └── page.tsx
+├── components
+│   ├── Navbar.tsx
+│   └── blocks
+│       ├── FaqBlock.tsx
+│       ├── HeroBlock.tsx
+│       ├── RichTextBlock.tsx
+│       └── index.tsx
+├── lib
+│   └── pages.ts
+├── next-env.d.ts
+├── next.config.ts
 ├── package.json
 ├── postcss.config.js
-├── src
-│   ├── App.tsx
-│   ├── api
-│   │   └── pages.ts
-│   ├── blocks
-│   │   ├── FaqBlock.tsx
-│   │   ├── HeroBlock.tsx
-│   │   ├── RichTextBlock.tsx
-│   │   └── index.tsx
-│   ├── hooks
-│   │   └── usePage.ts
-│   ├── index.css
-│   ├── main.tsx
-│   ├── pages
-│   │   ├── NotFound.tsx
-│   │   └── PageView.tsx
-│   └── types
-│       └── index.ts
 ├── tailwind.config.js
-├── tsconfig.app.json
 ├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
+└── types
+    └── index.ts
