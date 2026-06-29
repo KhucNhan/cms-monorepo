@@ -1,0 +1,14 @@
+{
+    "extends": "@cms/tsconfig/base.json",
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "ES2021",
+        "outDir": "./dist",
+        "rootDir": ".",
+        "declaration": true
+    },
+    "include": [
+        "src/**/*",
+        "schema-only.ts"
+    ]
+}

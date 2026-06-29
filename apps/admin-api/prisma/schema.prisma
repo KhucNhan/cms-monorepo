@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────
+
+enum VersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ─────────────────────────────────────────────────────────
+// RBAC
+// ─────────────────────────────────────────────────────────
+
+model Role {
+  id   String @id @default(uuid())
+  name String @unique  // "admin" | "editor" | "viewer"
+
+  rolePermissions RolePermission[]
+  users           User[]
+
+  @@map("roles")
+}
+
+/// Mỗi dòng là một quyền atomic: resource + action
+/// Ví dụ: { resource: "page", action: "publish" }
+model Permission {
+  id       String @id @default(uuid())
+  resource String // "page" | "media" | "user"
+  action   String // "create" | "read" | "update" | "delete" | "publish"
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])   // không tạo duplicate permission
+  @@map("permissions")
+}
+
+/// Bảng nối Role ↔ Permission (many-to-many)
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────────────────
+// Users
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  password     String  // bcrypt hash — tên trường khớp DBML
+  roleId       String
+
+  role         Role          @relation(fields: [roleId], references: [id])
+  pageVersions PageVersion[]
+
+  // Refresh token hash — không có trong DBML gốc nhưng cần cho auth
+  refreshTokenHash String?
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────
+// CMS Core
+// ─────────────────────────────────────────────────────────
+
+model Page {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  // Con trỏ sang version đang live (null = chưa publish lần nào)
+  publishedVersionId String?      @unique
+  publishedVersion   PageVersion? @relation("PublishedVersion", fields: [publishedVersionId], references: [id])
+
+  versions PageVersion[] @relation("PageVersions")
+
+  @@map("pages")
+}
+
+model PageVersion {
+  id        String        @id @default(uuid())
+  status    VersionStatus @default(DRAFT)
+  seoMeta   Json          @default("{}")  // { title, description, ogImage, noIndex }
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  pageId    String
+  page      Page   @relation("PageVersions", fields: [pageId], references: [id], onDelete: Cascade)
+
+  createdBy String
+  creator   User   @relation(fields: [createdBy], references: [id])
+
+  // Nghịch đảo của Page.publishedVersion
+  publishedOf Page? @relation("PublishedVersion")
+
+  blocks Block[]
+
+  @@index([pageId, status])
+  @@map("page_versions")
+}
+
+model Block {
+  id         String   @id @default(uuid())
+  type       String   // khớp key trong block-registry: "hero" | "rich-text" | "faq"
+  orderIndex Int
+  data       Json     // validated bằng Zod từ block-registry trước khi write
+  updatedAt  DateTime @updatedAt
+
+  pageVersionId String
+  pageVersion   PageVersion @relation(fields: [pageVersionId], references: [id], onDelete: Cascade)
+
+  @@index([pageVersionId, orderIndex])
+  @@map("blocks")
+}
+
+// ─────────────────────────────────────────────────────────
+// Media
+// ─────────────────────────────────────────────────────────
+
+model Media {
+  id       String  @id @default(uuid())
+  url      String
+  key      String  @unique   // object key trên S3/R2/local
+  mimeType String
+  width    Int?
+  height   Int?
+
+  @@map("media")
+}
