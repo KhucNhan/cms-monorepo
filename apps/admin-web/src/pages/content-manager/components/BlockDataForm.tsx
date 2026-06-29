@@ -9,8 +9,13 @@ interface BlockDataFormProps {
   onChange: (newData: any) => void;
 }
 
+function normalizeBlockType(type: string): string {
+  if (type === 'rich_text' || type === 'richtext') return 'rich-text';
+  return type;
+}
+
 export function BlockDataForm({ type, data, onChange }: BlockDataFormProps) {
-  switch (type) {
+  switch (normalizeBlockType(type)) {
     case 'hero':
       return <HeroBlockEditor data={data} onChange={onChange} />;
     case 'rich-text':

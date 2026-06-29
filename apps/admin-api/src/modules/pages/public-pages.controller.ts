@@ -1,6 +1,7 @@
 import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BlocksService } from '../blocks/blocks.service';
 
 /**
  * Public (no-auth) endpoint used by the `apps/web` frontend.
@@ -9,7 +10,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 @ApiTags('public')
 @Controller('public/pages')
 export class PublicPagesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly blocksService: BlocksService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all published pages (for sitemap / nav)' })
@@ -54,17 +58,21 @@ export class PublicPagesController {
 
     const seoMeta = (page.publishedVersion.seoMeta ?? {}) as Record<string, unknown>;
 
+    const blocks = await Promise.all(
+      page.publishedVersion.blocks.map(async (b) => ({
+        id: b.id,
+        type: b.type,
+        order: b.orderIndex,
+        data: await this.blocksService.enrichBlockData(b.type, b.data),
+      })),
+    );
+
     return {
       id: page.id,
       slug: page.slug,
       title: (seoMeta['title'] as string | undefined) ?? page.slug,
       seoMeta,
-      blocks: page.publishedVersion.blocks.map((b) => ({
-        id: b.id,
-        type: b.type,
-        order: b.orderIndex,
-        data: b.data,
-      })),
+      blocks,
     };
   }
 }

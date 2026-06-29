@@ -5,6 +5,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { BlocksModule } from './modules/blocks/blocks.module';
 import { UsersModule } from './modules/users/users.module';
+import { MediaModule } from './modules/media/media.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { UsersModule } from './modules/users/users.module';
     PagesModule,
     BlocksModule,
     UsersModule,
+    MediaModule,
   ],
 })
 export class AppModule {}

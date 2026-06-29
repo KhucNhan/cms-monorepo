@@ -13,19 +13,30 @@ export function HeroBlock({ data }: Props) {
     buttonText,
     buttonHref = '#',
     overlayOpacity = 0,
+    image,
   } = data;
+
+  const imageUrl = image?.url;
 
   return (
     <section
       className={clsx(
         'relative w-full bg-gray-900 text-white',
         'flex flex-col items-center justify-center',
-        'px-6 py-24 min-h-[480px]',
+        'px-6 py-24 min-h-[480px] overflow-hidden',
         alignment === 'left' && 'items-start text-left',
         alignment === 'right' && 'items-end text-right',
         alignment === 'center' && 'items-center text-center',
       )}
     >
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt={image?.alt ?? ''}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      )}
+
       <div
         aria-hidden
         className="absolute inset-0 bg-black"
