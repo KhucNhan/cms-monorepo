@@ -14,6 +14,7 @@ exports.heroSchema = zod_1.z.object({
     image: zod_1.z.object({
         mediaId: zod_1.z.string(),
         alt: zod_1.z.string().max(255),
+        url: zod_1.z.string().optional(),
     }),
     buttonText: zod_1.z
         .string()

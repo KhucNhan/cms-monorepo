@@ -135,13 +135,26 @@ export function PageEditPage() {
     const draftBlocksData = await blocksApi.getByVersion(newDraft.id);
     const draftOriginal = [...draftBlocksData].sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // Map local UI edits onto draft blocks by index
-    const blocksToSave = draftOriginal.map((draftBlock, idx) => {
-      const uiBlock = currentUIBlocks[idx];
-      if (uiBlock && uiBlock.type === draftBlock.type) {
-        return { ...draftBlock, data: uiBlock.data };
+    // Build a map: originalBlockId → the corresponding new draft block
+    // The fork preserves order, so originalBlocks[i] ↔ draftOriginal[i]
+    const idToNewDraftBlock = new Map<string, Block>();
+    originalBlocks.forEach((origBlock, idx) => {
+      if (draftOriginal[idx]) {
+        idToNewDraftBlock.set(origBlock.id, draftOriginal[idx]);
       }
-      return draftBlock;
+    });
+
+    // Traverse currentUIBlocks in the USER'S order (may be reordered),
+    // substitute each block with its new draft counterpart, and carry over
+    // any data edits.  This is the only correct way to preserve both the
+    // reorder AND the content edits from the UI.
+    const blocksToSave = currentUIBlocks.map((uiBlock, idx) => {
+      const newDraftBlock = idToNewDraftBlock.get(uiBlock.id);
+      if (newDraftBlock) {
+        return { ...newDraftBlock, data: uiBlock.data, orderIndex: idx };
+      }
+      // Fallback: block was added after last save and has no draft counterpart
+      return { ...uiBlock, orderIndex: idx };
     });
 
     // NOTE: do NOT call setBlocks / setCurrentVersion / setOriginalBlocks here.
@@ -181,9 +194,14 @@ export function PageEditPage() {
     try {
       setLoading(true);
       const { draft, blocksToSave } = await ensureDraftVersion(blocks);
-      await blocksApi.remove(blockId);
-      
-      const filtered = blocksToSave.filter((b) => b.id !== blockId);
+
+      const uiIndex = blocks.findIndex((b) => b.id === blockId);
+      if (uiIndex === -1) return;
+
+      const draftBlockId = blocksToSave[uiIndex]?.id ?? blockId;
+      await blocksApi.remove(draftBlockId);
+
+      const filtered = blocksToSave.filter((_, idx) => idx !== uiIndex);
       const reassigned = filtered.map((b, idx) => ({ ...b, orderIndex: idx }));
 
       if (reassigned.length > 0) {
@@ -210,12 +228,9 @@ export function PageEditPage() {
     if (targetIndex < 0 || targetIndex >= blocks.length) return;
 
     const list = [...blocks];
-    const tempIndex = list[index].orderIndex;
-    list[index].orderIndex = list[targetIndex].orderIndex;
-    list[targetIndex].orderIndex = tempIndex;
-
-    const sorted = list.sort((a, b) => a.orderIndex - b.orderIndex);
-    setBlocks(sorted);
+    [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+    const reassigned = list.map((b, idx) => ({ ...b, orderIndex: idx }));
+    setBlocks(reassigned);
     updateIsDirty(true);
   };
 
@@ -228,7 +243,7 @@ export function PageEditPage() {
   };
 
   // ─── 6. Save Core Logic ────────────────────────────────────────────────────
-  const saveAllChanges = async (): Promise<boolean> => {
+  const saveAllChanges = async (): Promise<{ ok: boolean; versionId?: string }> => {
     setSaving(true);
     let wasForked = false;
     let newDraft: PageVersion | null = null;
@@ -274,7 +289,7 @@ export function PageEditPage() {
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedFresh))); // reset baseline
       updateIsDirty(false);
       addToast('Draft saved successfully!', 'success');
-      return true;
+      return { ok: true, versionId: draft.id };
     } catch (err) {
       console.error(err);
 
@@ -301,7 +316,7 @@ export function PageEditPage() {
         }
       }
       addToast(msg, 'error');
-      return false;
+      return { ok: false };
     } finally {
       setSaving(false);
     }
@@ -322,13 +337,16 @@ export function PageEditPage() {
     if (!page || !currentVersion) return;
     setPublishing(true);
     try {
+      let versionIdToPublish = currentVersion.id;
+
       // If there are unsaved edits, save them to draft first
       if (isDirty) {
-        const saved = await saveAllChanges();
-        if (!saved) return;
+        const result = await saveAllChanges();
+        if (!result.ok) return;
+        if (result.versionId) versionIdToPublish = result.versionId;
       }
 
-      await pagesApi.publish(page.id, currentVersion.id);
+      await pagesApi.publish(page.id, versionIdToPublish);
       addToast('Page published live to public website successfully!', 'success');
       await initializePage();
     } catch (err) {
@@ -343,8 +361,8 @@ export function PageEditPage() {
   // ─── 8. Blocker Actions ────────────────────────────────────────────────────
   const handleSaveAndLeave = async () => {
     if (blocker.state !== 'blocked') return;
-    const success = await saveAllChanges();
-    if (success) {
+    const result = await saveAllChanges();
+    if (result.ok) {
       blocker.proceed();
     }
   };

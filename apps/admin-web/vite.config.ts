@@ -18,8 +18,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        // Nếu BE không có prefix /api, bỏ comment dòng dưới:
-        // rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
       },
     },
   },

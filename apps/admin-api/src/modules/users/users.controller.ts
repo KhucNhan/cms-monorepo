@@ -1,9 +1,29 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Req,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { FastifyRequest } from 'fastify';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, RequirePermissions } from '../auth/guards/roles.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { UsersService, createUserSchema, type CreateUserDto } from './users.service';
+import {
+  UsersService,
+  createUserSchema,
+  updateUserSchema,
+  type CreateUserDto,
+  type UpdateUserDto,
+} from './users.service';
+import type { JwtPayload } from '@cms/shared-types';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -19,6 +39,13 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('roles/list')
+  @RequirePermissions('user:read')
+  @ApiOperation({ summary: 'List available roles' })
+  findRoles() {
+    return this.usersService.findRoles();
+  }
+
   @Get(':id')
   @RequirePermissions('user:read')
   @ApiOperation({ summary: 'Get user by ID' })
@@ -31,5 +58,26 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a new user' })
   create(@Body(new ZodValidationPipe(createUserSchema)) dto: CreateUserDto) {
     return this.usersService.create(dto);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('user:update')
+  @ApiOperation({ summary: 'Update a user' })
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateUserSchema)) dto: UpdateUserDto,
+  ) {
+    return this.usersService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('user:delete')
+  @ApiOperation({ summary: 'Delete a user' })
+  remove(
+    @Param('id') id: string,
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.usersService.delete(id, req.user.sub);
   }
 }

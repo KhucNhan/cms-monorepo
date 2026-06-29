@@ -124,6 +124,23 @@ export interface PageFilters {
   pageSize?: number;
 }
 
+// ─── Media ───────────────────────────────────────────────────────────────────
+
+export interface MediaItem {
+  id: string;
+  url: string;
+  key: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface MediaFilters {
+  page?: number;
+  pageSize?: number;
+  mimeType?: string;
+}
+
 // ─── Legacy Content types (giữ để không break Badge, content.api, useContentEntries) ──
 
 export type ContentStatus = 'published' | 'draft' | 'archived';

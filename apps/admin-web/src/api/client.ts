@@ -25,9 +25,10 @@ export class ApiClientError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = tokenStorage.get();
+  const hasBody = init.body !== undefined && init.body !== null && init.body !== '';
 
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(init.headers ?? {}),
   };
@@ -44,13 +45,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const payload = await res.json().catch(() => ({ message: res.statusText }));
 
   if (!res.ok) {
-    const err = payload as ApiError;
-    // Token expired → clear and redirect (avoid loop if already on /login)
+    const err = payload as ApiError & { error?: { message?: string } };
     if (res.status === 401 && !window.location.pathname.startsWith('/login')) {
       tokenStorage.clear();
       window.location.href = '/login';
     }
-    throw new ApiClientError(res.status, err.message ?? 'Something went wrong', payload);
+    const message = err.error?.message ?? err.message ?? 'Something went wrong';
+    throw new ApiClientError(res.status, message, payload);
   }
 
   // Unwrap BE envelope: { success: true, data: ... }
