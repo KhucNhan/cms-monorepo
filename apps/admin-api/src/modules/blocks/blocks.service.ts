@@ -61,11 +61,43 @@ export class BlocksService {
     return result.data;
   }
 
+  /** Resolve hero image.url from media table when only mediaId is stored */
+  async enrichBlockData(type: string, data: unknown): Promise<unknown> {
+    if (type !== 'hero' || !data || typeof data !== 'object') {
+      return data;
+    }
+
+    const hero = data as Record<string, unknown>;
+    const image = hero['image'] as Record<string, unknown> | undefined;
+    const mediaId = image?.['mediaId'] as string | undefined;
+
+    if (!mediaId || image?.['url']) {
+      return data;
+    }
+
+    const media = await this.prisma.media.findUnique({ where: { id: mediaId } });
+    if (!media) {
+      return data;
+    }
+
+    return {
+      ...hero,
+      image: { ...image, url: media.url },
+    };
+  }
+
   async findByVersion(pageVersionId: string) {
-    return this.prisma.block.findMany({
+    const blocks = await this.prisma.block.findMany({
       where: { pageVersionId },
       orderBy: { orderIndex: 'asc' },
     });
+
+    return Promise.all(
+      blocks.map(async (block) => ({
+        ...block,
+        data: (await this.enrichBlockData(block.type, block.data)) as object,
+      })),
+    );
   }
 
   async findOne(id: string) {
@@ -116,7 +148,8 @@ export class BlocksService {
     const updateData: Record<string, unknown> = {};
 
     if (dto.data !== undefined) {
-      updateData['data'] = this.validateBlockData(block.type, dto.data);
+      const validated = this.validateBlockData(block.type, dto.data);
+      updateData['data'] = await this.enrichBlockData(block.type, validated);
     }
 
     if (dto.orderIndex !== undefined) {
@@ -144,7 +177,16 @@ export class BlocksService {
   }
 
   async delete(id: string) {
-    await this.findOne(id); // throws if not found
+    const block = await this.findOne(id);
+    const version = await this.prisma.pageVersion.findUnique({
+      where: { id: block.pageVersionId },
+    });
+    if (version?.status !== 'DRAFT') {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Cannot delete blocks from a published or archived version',
+      });
+    }
     await this.prisma.block.delete({ where: { id } });
     return { deleted: true };
   }

@@ -4,6 +4,9 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import fastifyCookie from '@fastify/cookie';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { join } from 'path';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -18,6 +21,16 @@ async function bootstrap() {
 
   await app.register(fastifyCookie, {
     secret: process.env['COOKIE_SECRET'] ?? 'cms-cookie-secret-change-me',
+  });
+
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 10 * 1024 * 1024 },
+  });
+
+  await app.register(fastifyStatic, {
+    root: join(process.cwd(), 'uploads'),
+    prefix: '/uploads/',
+    decorateReply: false,
   });
 
   // Logging

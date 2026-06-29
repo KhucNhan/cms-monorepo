@@ -5,9 +5,10 @@ import { PageVersionsController } from './page-versions.controller';
 import { PageVersionsService } from './page-versions.service';
 import { PublicPagesController } from './public-pages.controller';
 import { AuthModule } from '../auth/auth.module';
+import { BlocksModule } from '../blocks/blocks.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, BlocksModule],
   controllers: [PagesController, PageVersionsController, PublicPagesController],
   providers: [PagesService, PageVersionsService],
   exports: [PagesService, PageVersionsService],

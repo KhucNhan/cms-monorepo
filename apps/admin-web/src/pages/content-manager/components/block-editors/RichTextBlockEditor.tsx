@@ -1,4 +1,9 @@
 import type { RichTextBlockData } from '@/types';
+import {
+  contentToHtmlFallback,
+  getRichTextDisplayText,
+  plainTextToContent,
+} from './rich-text.utils';
 
 interface RichTextBlockEditorProps {
   data: RichTextBlockData;
@@ -6,29 +11,15 @@ interface RichTextBlockEditorProps {
 }
 
 export function RichTextBlockEditor({ data, onChange }: RichTextBlockEditorProps) {
-  const htmlFallback = data.htmlFallback ?? '';
   const textAlign = data.textAlign ?? 'left';
+  const displayText = getRichTextDisplayText(data);
 
-  const handleHtmlChange = (newHtml: string) => {
-    const plainText = newHtml.replace(/<[^>]*>/g, '');
-    const contentDoc = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: plainText || ' ',
-            },
-          ],
-        },
-      ],
-    };
+  const handleContentChange = (newText: string) => {
+    const nextContent = plainTextToContent(newText);
     onChange({
       ...data,
-      htmlFallback: newHtml,
-      content: contentDoc,
+      content: nextContent,
+      htmlFallback: contentToHtmlFallback(nextContent),
     });
   };
 
@@ -38,7 +29,7 @@ export function RichTextBlockEditor({ data, onChange }: RichTextBlockEditorProps
         <label className="text-label-md font-bold text-on-surface">Text Alignment</label>
         <select
           value={textAlign}
-          onChange={(e) => onChange({ ...data, textAlign: e.target.value as any })}
+          onChange={(e) => onChange({ ...data, textAlign: e.target.value as RichTextBlockData['textAlign'] })}
           className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none max-w-xs"
         >
           <option value="left">Left</option>
@@ -49,14 +40,17 @@ export function RichTextBlockEditor({ data, onChange }: RichTextBlockEditorProps
       </div>
 
       <div className="flex flex-col gap-xs">
-        <label className="text-label-md font-bold text-on-surface">HTML Content</label>
+        <label className="text-label-md font-bold text-on-surface">Content</label>
         <textarea
           rows={6}
-          value={htmlFallback}
-          onChange={(e) => handleHtmlChange(e.target.value)}
-          className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md font-mono focus:border-primary outline-none w-full"
-          placeholder="<p>Write your HTML content here...</p>"
+          value={displayText}
+          onChange={(e) => handleContentChange(e.target.value)}
+          className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none w-full"
+          placeholder="Write your content here..."
         />
+        <p className="text-[11px] text-on-surface-variant">
+          Edits update the ProseMirror <code className="font-mono">content</code> field. Use new lines for separate paragraphs.
+        </p>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ export interface HeroBlockData {
   image?: {
     alt: string;
     mediaId: string;
+    url?: string;
   };
 }
 

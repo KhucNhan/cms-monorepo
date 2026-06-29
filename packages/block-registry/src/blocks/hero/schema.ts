@@ -14,6 +14,7 @@ export const heroSchema = z.object({
   image: z.object({
     mediaId: z.string(),
     alt: z.string().max(255),
+    url: z.string().optional(),
   }),
 
   buttonText: z
