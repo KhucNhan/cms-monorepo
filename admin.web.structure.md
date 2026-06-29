@@ -10,8 +10,10 @@ admin-web
 │   │   ├── blocks.api.ts
 │   │   ├── client.ts
 │   │   ├── content.api.ts
+│   │   ├── media.api.ts
 │   │   ├── page-versions.api.ts
-│   │   └── pages.api.ts
+│   │   ├── pages.api.ts
+│   │   └── users.api.ts
 │   ├── components
 │   │   ├── ProtectedRoute.tsx
 │   │   ├── layout
@@ -30,7 +32,9 @@ admin-web
 │   ├── hooks
 │   │   ├── useAuth.ts
 │   │   ├── useContentEntries.ts
-│   │   └── usePages.ts
+│   │   ├── useMedia.ts
+│   │   ├── usePages.ts
+│   │   └── useUsers.ts
 │   ├── index.css
 │   ├── main.tsx
 │   ├── pages
@@ -49,11 +53,20 @@ admin-web
 │   │   │           ├── FaqBlockEditor.tsx
 │   │   │           ├── HeroBlockEditor.tsx
 │   │   │           ├── JsonBlockEditor.tsx
-│   │   │           └── RichTextBlockEditor.tsx
+│   │   │           ├── RichTextBlockEditor.tsx
+│   │   │           └── rich-text.utils.ts
 │   │   ├── content-type-builder
 │   │   │   └── ContentTypeBuilderPage.tsx
-│   │   └── dashboard
-│   │       └── DashboardPage.tsx
+│   │   ├── dashboard
+│   │   │   └── DashboardPage.tsx
+│   │   ├── media-library
+│   │   │   ├── MediaLibraryPage.tsx
+│   │   │   └── components
+│   │   │       └── MediaPickerModal.tsx
+│   │   └── settings
+│   │       ├── SettingsPage.tsx
+│   │       └── components
+│   │           └── UserFormModal.tsx
 │   └── types
 │       └── index.ts
 ├── tailwind.config.js
