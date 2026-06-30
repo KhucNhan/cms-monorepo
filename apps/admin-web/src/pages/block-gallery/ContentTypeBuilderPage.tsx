@@ -74,7 +74,7 @@ export function ContentTypeBuilderPage() {
 
   if (!activeType) {
     return (
-      <AppLayout title="Dashboard" breadcrumb={{ label: 'Content-Type Builder' }}>
+      <AppLayout title="Block Gallery" >
         <div className="flex items-center justify-center h-full text-on-surface-variant">
           No block types registered.
         </div>
@@ -111,14 +111,14 @@ export function ContentTypeBuilderPage() {
 
   return (
     <AppLayout
-      title="Dashboard"
-      breadcrumb={{ label: 'Content-Type Builder', highlight: activeType.name }}
-      actions={
-        <>
-          <Button variant="secondary" size="md">Cancel</Button>
-          <Button variant="primary"   size="md" onClick={handleSave}>Save Changes</Button>
-        </>
-      }
+      title="Block Gallery"
+      // breadcrumb={{ label: 'Content-Type Builder', highlight: activeType.name }}
+      // actions={
+      //   <>
+      //     <Button variant="secondary" size="md">Cancel</Button>
+      //     <Button variant="primary"   size="md" onClick={handleSave}>Save Changes</Button>
+      //   </>
+      // }
     >
       <div className="flex h-[calc(100vh-64px)] overflow-hidden">
         {/* ── Left panel: Block Types list ── */}
@@ -127,13 +127,13 @@ export function ContentTypeBuilderPage() {
             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider">
               Block Types
             </span>
-            <button
+            {/* <button
               className="text-primary hover:text-on-primary-fixed-variant transition-colors"
               title="Add new type"
               onClick={() => addToast('Block type creation coming soon.', 'info')}
             >
               <span className="material-symbols-outlined">add_box</span>
-            </button>
+            </button> */}
           </div>
 
           <ul className="flex flex-col flex-1">
@@ -192,7 +192,7 @@ export function ContentTypeBuilderPage() {
               ))}
 
               {/* Add field button */}
-              <button
+              {/* <button
                 onClick={() => addToast('Field palette coming soon.', 'info')}
                 className="w-full py-xl border-2 border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group"
               >
@@ -201,13 +201,13 @@ export function ContentTypeBuilderPage() {
                 </div>
                 <span className="font-bold">Add another field</span>
                 <span className="text-label-md opacity-60">Text, Number, Date, Media, and more</span>
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
 
         {/* ── Right panel: Field Settings ── */}
-        <aside className="w-80 border-l border-outline-variant bg-surface-container-low flex-shrink-0 flex flex-col overflow-hidden">
+        {/* <aside className="w-80 border-l border-outline-variant bg-surface-container-low flex-shrink-0 flex flex-col overflow-hidden">
           <div className="p-md border-b border-outline-variant bg-surface-container flex items-center gap-sm flex-shrink-0">
             <span className="material-symbols-outlined text-primary">settings_applications</span>
             <span className="font-bold text-on-surface">Field Settings</span>
@@ -226,7 +226,7 @@ export function ContentTypeBuilderPage() {
               <p className="text-body-md">Select a field to edit its settings</p>
             </div>
           )}
-        </aside>
+        </aside> */}
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -264,14 +264,14 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDelete, onDragSta
       )}
     >
       {/* Drag handle */}
-      <div
+      {/* <div
         className={cn(
           'text-outline-variant group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing',
           isSelected && 'text-primary',
         )}
       >
         <span className="material-symbols-outlined">drag_indicator</span>
-      </div>
+      </div> */}
 
       {/* Icon */}
       <div className={cn('w-10 h-10 rounded flex items-center justify-center', meta.bg)}>
@@ -292,7 +292,7 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDelete, onDragSta
       </div>
 
       {/* Actions */}
-      <div
+      {/* <div
         className={cn(
           'flex items-center gap-sm transition-opacity',
           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
@@ -311,144 +311,144 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDelete, onDragSta
         >
           <span className="material-symbols-outlined text-[20px]">delete</span>
         </button>
-      </div>
+      </div> */}
     </div>
   );
 }
 
 // ─── FieldSettingsPanel ───────────────────────────────────────────────────────
 
-interface FieldSettingsPanelProps {
-  field: ContentField;
-  onChange: (key: keyof ContentField, value: unknown) => void;
-}
+// interface FieldSettingsPanelProps {
+//   field: ContentField;
+//   onChange: (key: keyof ContentField, value: unknown) => void;
+// }
 
-function FieldSettingsPanel({ field, onChange }: FieldSettingsPanelProps) {
-  const meta = FIELD_TYPE_META[field.type] ?? FIELD_TYPE_META['text'];
+// function FieldSettingsPanel({ field, onChange }: FieldSettingsPanelProps) {
+//   const meta = FIELD_TYPE_META[field.type] ?? FIELD_TYPE_META['text'];
 
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-md space-y-xl">
-        {/* Basic Info */}
-        <div className="space-y-md">
-          <label className="block">
-            <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
-              Display Name
-            </span>
-            <input
-              type="text"
-              value={field.displayName}
-              onChange={(e) => onChange('displayName', e.target.value)}
-              className="w-full bg-white border border-outline rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-            />
-          </label>
+//   return (
+//     <div className="flex-1 flex flex-col overflow-hidden">
+//       <div className="flex-1 overflow-y-auto custom-scrollbar p-md space-y-xl">
+//         {/* Basic Info */}
+//         <div className="space-y-md">
+//           <label className="block">
+//             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
+//               Display Name
+//             </span>
+//             <input
+//               type="text"
+//               value={field.displayName}
+//               onChange={(e) => onChange('displayName', e.target.value)}
+//               className="w-full bg-white border border-outline rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+//             />
+//           </label>
 
-          <label className="block">
-            <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
-              API ID
-            </span>
-            <input
-              type="text"
-              value={field.apiId}
-              readOnly
-              className="w-full bg-surface-variant/50 border border-outline-variant rounded p-sm font-code text-code text-on-surface-variant cursor-not-allowed"
-            />
-            <p className="text-[10px] text-on-surface-variant mt-xs">Auto-generated from display name.</p>
-          </label>
-        </div>
+//           <label className="block">
+//             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
+//               API ID
+//             </span>
+//             <input
+//               type="text"
+//               value={field.apiId}
+//               readOnly
+//               className="w-full bg-surface-variant/50 border border-outline-variant rounded p-sm font-code text-code text-on-surface-variant cursor-not-allowed"
+//             />
+//             <p className="text-[10px] text-on-surface-variant mt-xs">Auto-generated from display name.</p>
+//           </label>
+//         </div>
 
-        {/* Type selector */}
-        <div>
-          <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
-            Data Type
-          </span>
-          <div className="grid grid-cols-2 gap-sm">
-            {(Object.keys(FIELD_TYPE_META) as FieldType[]).slice(0, 4).map((type) => {
-              const m = FIELD_TYPE_META[type];
-              return (
-                <button
-                  key={type}
-                  onClick={() => onChange('type', type)}
-                  className={cn(
-                    'p-sm rounded border flex items-center gap-sm cursor-pointer transition-all',
-                    field.type === type
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-outline-variant bg-white hover:border-primary/50 text-on-surface-variant',
-                  )}
-                >
-                  <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
-                  <span className="text-xs font-semibold">{m.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-sm">
-            <span className="text-[10px] text-on-surface-variant">
-              Current:{' '}
-              <span className={cn('font-bold', meta.color)}>{meta.label}</span>
-            </span>
-          </div>
-        </div>
+//         {/* Type selector */}
+//         <div>
+//           <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
+//             Data Type
+//           </span>
+//           <div className="grid grid-cols-2 gap-sm">
+//             {(Object.keys(FIELD_TYPE_META) as FieldType[]).slice(0, 4).map((type) => {
+//               const m = FIELD_TYPE_META[type];
+//               return (
+//                 <button
+//                   key={type}
+//                   onClick={() => onChange('type', type)}
+//                   className={cn(
+//                     'p-sm rounded border flex items-center gap-sm cursor-pointer transition-all',
+//                     field.type === type
+//                       ? 'border-primary bg-primary/5 text-primary'
+//                       : 'border-outline-variant bg-white hover:border-primary/50 text-on-surface-variant',
+//                   )}
+//                 >
+//                   <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
+//                   <span className="text-xs font-semibold">{m.label}</span>
+//                 </button>
+//               );
+//             })}
+//           </div>
+//           <div className="mt-sm">
+//             <span className="text-[10px] text-on-surface-variant">
+//               Current:{' '}
+//               <span className={cn('font-bold', meta.color)}>{meta.label}</span>
+//             </span>
+//           </div>
+//         </div>
 
-        <hr className="border-outline-variant" />
+//         <hr className="border-outline-variant" />
 
-        {/* Validations */}
-        <div>
-          <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
-            Validations
-          </span>
-          <div className="space-y-sm">
-            <ToggleRow
-              label="Required field"
-              checked={field.required}
-              onChange={(v) => onChange('required', v)}
-            />
-            <ToggleRow
-              label="Private field"
-              checked={field.private}
-              onChange={(v) => onChange('private', v)}
-            />
-          </div>
-        </div>
+//         {/* Validations */}
+//         <div>
+//           <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
+//             Validations
+//           </span>
+//           <div className="space-y-sm">
+//             <ToggleRow
+//               label="Required field"
+//               checked={field.required}
+//               onChange={(v) => onChange('required', v)}
+//             />
+//             <ToggleRow
+//               label="Private field"
+//               checked={field.private}
+//               onChange={(v) => onChange('private', v)}
+//             />
+//           </div>
+//         </div>
 
-        {/* Advanced */}
-        <details className="group">
-          <summary className="text-label-md font-label-md text-secondary uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
-            <span>Advanced Settings</span>
-            <span className="material-symbols-outlined transition-transform group-open:rotate-180">
-              expand_more
-            </span>
-          </summary>
-          <div className="pt-sm space-y-md">
-            <label className="block">
-              <span className="text-xs text-on-surface-variant block mb-xs">Default Value</span>
-              <input
-                type="text"
-                placeholder="Enter default value..."
-                className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs text-on-surface-variant block mb-xs">Placeholder Text</span>
-              <input
-                type="text"
-                placeholder="Describe the field..."
-                className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              />
-            </label>
-          </div>
-        </details>
-      </div>
+//         {/* Advanced */}
+//         <details className="group">
+//           <summary className="text-label-md font-label-md text-secondary uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
+//             <span>Advanced Settings</span>
+//             <span className="material-symbols-outlined transition-transform group-open:rotate-180">
+//               expand_more
+//             </span>
+//           </summary>
+//           <div className="pt-sm space-y-md">
+//             <label className="block">
+//               <span className="text-xs text-on-surface-variant block mb-xs">Default Value</span>
+//               <input
+//                 type="text"
+//                 placeholder="Enter default value..."
+//                 className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+//               />
+//             </label>
+//             <label className="block">
+//               <span className="text-xs text-on-surface-variant block mb-xs">Placeholder Text</span>
+//               <input
+//                 type="text"
+//                 placeholder="Describe the field..."
+//                 className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+//               />
+//             </label>
+//           </div>
+//         </details>
+//       </div>
 
-      {/* Footer */}
-      <div className="p-md border-t border-outline-variant flex-shrink-0">
-        <button className="w-full bg-surface-container-highest text-secondary border border-outline-variant py-sm rounded font-bold hover:bg-outline-variant/20 transition-all">
-          Reset to Default
-        </button>
-      </div>
-    </div>
-  );
-}
+//       {/* Footer */}
+//       <div className="p-md border-t border-outline-variant flex-shrink-0">
+//         <button className="w-full bg-surface-container-highest text-secondary border border-outline-variant py-sm rounded font-bold hover:bg-outline-variant/20 transition-all">
+//           Reset to Default
+//         </button>
+//       </div>
+//     </div>
+//   );
+// }
 
 // ─── ToggleRow ────────────────────────────────────────────────────────────────
 

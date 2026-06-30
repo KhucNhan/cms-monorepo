@@ -201,7 +201,7 @@ function PageRow({
             <p className="text-[14px] font-semibold text-on-background truncate max-w-[280px]">
               /{page.slug}
             </p>
-            <p className="text-[11px] text-on-surface-variant font-mono">{page.id.slice(0, 8)}…</p>
+            {/* <p className="text-[11px] text-on-surface-variant font-mono">{page.id.slice(0, 8)}…</p> */}
           </div>
         </div>
       </td>

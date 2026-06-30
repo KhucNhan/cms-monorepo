@@ -5,61 +5,61 @@ import { usePages } from '@/hooks/usePages';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const SUMMARY_CARDS = [
-  {
-    label: 'Total Content Entries',
-    value: '12,482',
-    delta: '+12%',
-    deltaIcon: 'arrow_upward',
-    deltaColor: 'text-primary',
-    bg: 'bg-primary/5 group-hover:bg-primary/10',
-    icon: 'description',
-    iconColor: 'text-primary',
-    iconBg: 'bg-primary/10',
-    sub: 'Updated 5 minutes ago',
-  },
-  {
-    label: 'Active Users',
-    value: '2,105',
-    delta: '+5.4%',
-    deltaIcon: 'arrow_upward',
-    deltaColor: 'text-on-secondary-container',
-    bg: 'bg-secondary/5 group-hover:bg-secondary/10',
-    icon: 'group',
-    iconColor: 'text-on-secondary-container',
-    iconBg: 'bg-secondary-container',
-    sub: 'Across 14 regions globally',
-  },
-  {
-    label: 'Recent Activity',
-    value: '48',
-    delta: 'Today',
-    deltaIcon: 'history',
-    deltaColor: 'text-tertiary',
-    bg: 'bg-tertiary/5 group-hover:bg-tertiary/10',
-    icon: 'bolt',
-    iconColor: 'text-tertiary',
-    iconBg: 'bg-tertiary-container/20',
-    sub: '3 unscheduled maintenance alerts',
-  },
-];
+// const SUMMARY_CARDS = [
+//   {
+//     label: 'Total Content Entries',
+//     value: '12,482',
+//     delta: '+12%',
+//     deltaIcon: 'arrow_upward',
+//     deltaColor: 'text-primary',
+//     bg: 'bg-primary/5 group-hover:bg-primary/10',
+//     icon: 'description',
+//     iconColor: 'text-primary',
+//     iconBg: 'bg-primary/10',
+//     sub: 'Updated 5 minutes ago',
+//   },
+//   {
+//     label: 'Active Users',
+//     value: '2,105',
+//     delta: '+5.4%',
+//     deltaIcon: 'arrow_upward',
+//     deltaColor: 'text-on-secondary-container',
+//     bg: 'bg-secondary/5 group-hover:bg-secondary/10',
+//     icon: 'group',
+//     iconColor: 'text-on-secondary-container',
+//     iconBg: 'bg-secondary-container',
+//     sub: 'Across 14 regions globally',
+//   },
+//   {
+//     label: 'Recent Activity',
+//     value: '48',
+//     delta: 'Today',
+//     deltaIcon: 'history',
+//     deltaColor: 'text-tertiary',
+//     bg: 'bg-tertiary/5 group-hover:bg-tertiary/10',
+//     icon: 'bolt',
+//     iconColor: 'text-tertiary',
+//     iconBg: 'bg-tertiary-container/20',
+//     sub: '3 unscheduled maintenance alerts',
+//   },
+// ];
 
 
-const CHECKLIST = [
-  { done: true,  label: 'Connect your database' },
-  { done: false, label: 'Define first Content Type' },
-  { done: false, label: 'Invite collaborators' },
-];
+// const CHECKLIST = [
+//   { done: true,  label: 'Connect your database' },
+//   { done: false, label: 'Define first Content Type' },
+//   { done: false, label: 'Invite collaborators' },
+// ];
 
 const QUICK_ACTIONS = [
-  {
-    icon: 'add_box',
-    iconBg: 'bg-primary/10',
-    iconColor: 'text-primary',
-    title: 'Create Content Type',
-    sub: 'Define new data structures',
-    href: '/content-type-builder',
-  },
+  // {
+  //   icon: 'add_box',
+  //   iconBg: 'bg-primary/10',
+  //   iconColor: 'text-primary',
+  //   title: 'Create Content Type',
+  //   sub: 'Define new data structures',
+  //   href: '/content-type-builder',
+  // },
   {
     icon: 'post_add',
     iconBg: 'bg-secondary-container',
@@ -68,14 +68,14 @@ const QUICK_ACTIONS = [
     sub: 'Populate your collections',
     href: '/content-manager',
   },
-  {
-    icon: 'menu_book',
-    iconBg: 'bg-outline-variant/20',
-    iconColor: 'text-on-surface',
-    title: 'Documentation',
-    sub: 'API guides and tutorials',
-    href: '#',
-  },
+  // {
+  //   icon: 'menu_book',
+  //   iconBg: 'bg-outline-variant/20',
+  //   iconColor: 'text-on-surface',
+  //   title: 'Documentation',
+  //   sub: 'API guides and tutorials',
+  //   href: '#',
+  // },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -86,25 +86,25 @@ export function DashboardPage() {
   return (
     <AppLayout
       title="Dashboard"
-      actions={
-        <>
-          <Button variant="secondary" icon="download" size="md">Export Data</Button>
-          <Button variant="primary"   icon="add"      size="md">Create New</Button>
-        </>
-      }
+      // actions={
+      //   <>
+      //     <Button variant="secondary" icon="download" size="md">Export Data</Button>
+      //     <Button variant="primary"   icon="add"      size="md">Create New</Button>
+      //   </>
+      // }
     >
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto space-y-xl">
           {/* Welcome */}
           <div>
             <h1 className="text-h1 font-h1 text-on-background">Welcome back, Admin!</h1>
-            <p className="text-on-surface-variant text-body-md mt-sm">
+            {/* <p className="text-on-surface-variant text-body-md mt-sm">
               Here's what's happening with your content today.
-            </p>
+            </p> */}
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
+          {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
             {SUMMARY_CARDS.map((card, idx) => (
               <div
                 key={card.label}
@@ -115,9 +115,9 @@ export function DashboardPage() {
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.iconBg}`}>
                     <span className={`material-symbols-outlined ${card.iconColor}`}>{card.icon}</span>
                   </div>
-                  <h4 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">
+                  <h4 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest"> */}
                     {/* Inject real total for first card */}
-                    {idx === 0
+                    {/* {idx === 0
                       ? `Total Pages: ${pagesLoading ? '…' : total}`
                       : card.label}
                   </h4>
@@ -132,7 +132,7 @@ export function DashboardPage() {
                 <p className="text-[12px] text-on-surface-variant mt-sm">{card.sub}</p>
               </div>
             ))}
-          </div>
+          </div> */}
 
           {/* Main Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">

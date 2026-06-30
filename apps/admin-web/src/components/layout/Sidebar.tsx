@@ -5,7 +5,7 @@ import type { NavItem } from '@/types';
 const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard',            label: 'Dashboard',            icon: 'dashboard' },
   { path: '/content-manager',      label: 'Content Manager',     icon: 'description' },
-  { path: '/content-type-builder', label: 'Content-Type Builder', icon: 'schema' },
+  { path: '/block-gallery', label: 'Block Gallery', icon: 'schema' },
   { path: '/media-library',        label: 'Media Library',        icon: 'perm_media' },
   { path: '/settings',             label: 'Settings',             icon: 'settings' },
 ];
@@ -55,7 +55,7 @@ export function Sidebar() {
 
       {/* Cloud Status */}
       <div className="px-md pb-md mt-auto flex-shrink-0">
-        <div className="bg-primary/5 rounded-lg p-md border border-primary/20 mb-md">
+        {/* <div className="bg-primary/5 rounded-lg p-md border border-primary/20 mb-md">
           <div className="flex items-center gap-xs mb-1">
             <span className="material-symbols-outlined text-primary text-[16px]">cloud_done</span>
             <span className="text-[10px] font-label-md text-primary-fixed-dim uppercase tracking-wider">
@@ -63,10 +63,10 @@ export function Sidebar() {
             </span>
           </div>
           <p className="text-[12px] text-secondary-fixed-dim">All systems operational.</p>
-        </div>
+        </div> */}
 
         {/* User */}
-        <div className="flex items-center gap-sm p-sm bg-white/5 rounded-lg">
+        {/* <div className="flex items-center gap-sm p-sm bg-white/5 rounded-lg">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-label-md flex-shrink-0">
             {MOCK_USER.initials}
           </div>
@@ -76,7 +76,7 @@ export function Sidebar() {
               {MOCK_USER.role}
             </p>
           </div>
-        </div>
+        </div> */}
       </div>
     </aside>
   );

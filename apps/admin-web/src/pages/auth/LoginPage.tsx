@@ -84,9 +84,9 @@ export function LoginPage() {
                 <label className="block text-label-md font-label-md text-on-surface-variant uppercase tracking-wider">
                   Password
                 </label>
-                <a href="#" className="text-label-md text-primary hover:text-on-primary-fixed-variant transition-colors font-semibold">
+                {/* <a href="#" className="text-label-md text-primary hover:text-on-primary-fixed-variant transition-colors font-semibold">
                   Forgot password?
-                </a>
+                </a> */}
               </div>
               <Input
                 ref={passwordRef}
@@ -100,7 +100,7 @@ export function LoginPage() {
             </div>
 
             {/* Remember me */}
-            <div className="flex items-center gap-sm">
+            {/* <div className="flex items-center gap-sm">
               <input
                 id="remember"
                 type="checkbox"
@@ -109,7 +109,7 @@ export function LoginPage() {
               <label htmlFor="remember" className="text-body-md text-on-surface-variant cursor-pointer select-none">
                 Remember me for 30 days
               </label>
-            </div>
+            </div> */}
 
             {/* Submit */}
             <button
@@ -143,7 +143,7 @@ export function LoginPage() {
           </form>
 
           {/* Divider */}
-          <div className="relative py-sm">
+          {/* <div className="relative py-sm">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-outline-variant" />
             </div>
@@ -152,10 +152,10 @@ export function LoginPage() {
                 or connect with
               </span>
             </div>
-          </div>
+          </div> */}
 
           {/* SSO / API Key */}
-          <div className="grid grid-cols-2 gap-md">
+          {/* <div className="grid grid-cols-2 gap-md">
             {[
               { icon: 'hub', label: 'SSO' },
               { icon: 'key', label: 'API Key' },
@@ -168,17 +168,17 @@ export function LoginPage() {
                 <span className="text-label-md font-label-md text-on-surface">{label}</span>
               </button>
             ))}
-          </div>
+          </div> */}
         </div>
 
         {/* Footer */}
-        <p className="text-center text-body-md text-on-surface-variant mt-xl">
+        {/* <p className="text-center text-body-md text-on-surface-variant mt-xl">
           Don't have an account?{' '}
           <a href="#" className="text-primary font-bold hover:underline">Sign up</a>
-        </p>
+        </p> */}
 
         {/* System status */}
-        <div className="mt-xl flex items-center justify-center gap-md opacity-40">
+        {/* <div className="mt-xl flex items-center justify-center gap-md opacity-40">
           <div className="flex items-center gap-xs">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span className="text-[10px] uppercase font-bold tracking-tighter">API Online</span>
@@ -187,7 +187,7 @@ export function LoginPage() {
           <span className="text-[10px] uppercase font-bold tracking-tighter">v1.0.0</span>
           <div className="w-1 h-1 rounded-full bg-outline-variant" />
           <span className="text-[10px] uppercase font-bold tracking-tighter">Region: US-EAST</span>
-        </div>
+        </div> */}
       </main>
     </div>
   );

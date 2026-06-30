@@ -381,7 +381,7 @@ export function PageEditPage() {
   // ─── Render Loading / Error States ────────────────────────────────────────
   if (loading && blocks.length === 0) {
     return (
-      <AppLayout title="Content Manager" breadcrumb={{ label: 'Pages', highlight: 'Loading…' }}>
+      <AppLayout title="Content Manager" >
         <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
           <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -412,21 +412,14 @@ export function PageEditPage() {
   return (
     <AppLayout
       title="Content Manager"
-      breadcrumb={{
-        label: 'Pages',
-        highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
-      }}
+      // breadcrumb={{
+        // label: 'Pages',
+        // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
+      // }}
       actions={
         <div className="flex items-center gap-sm">
           <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-manager')}>
             Back
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={handleDiscard}
-            disabled={!isDirty || saving || publishing}
-          >
-            Discard
           </Button>
           <Button
             variant="secondary"

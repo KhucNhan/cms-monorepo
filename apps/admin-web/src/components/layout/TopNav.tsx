@@ -97,7 +97,7 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
         )}
 
         {/* Icons */}
-        <div className="flex items-center gap-1">
+        {/* <div className="flex items-center gap-1">
           <button className="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-all duration-200 relative">
             <span className="material-symbols-outlined text-[22px]">
               notifications
@@ -111,7 +111,7 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
               help
             </span>
           </button>
-        </div>
+        </div> */}
 
         <div className="h-8 w-px bg-outline-variant" />
 

@@ -3,7 +3,7 @@ import { LoginPage }              from '@/pages/auth/LoginPage';
 import { DashboardPage }          from '@/pages/dashboard/DashboardPage';
 import { ContentManagerPage }     from '@/pages/content-manager/ContentManagerPage';
 import { PageEditPage }            from '@/pages/content-manager/PageEditPage';
-import { ContentTypeBuilderPage } from '@/pages/content-type-builder/ContentTypeBuilderPage';
+import { ContentTypeBuilderPage } from '@/pages/block-gallery/ContentTypeBuilderPage';
 import { MediaLibraryPage }     from '@/pages/media-library/MediaLibraryPage';
 import { SettingsPage }         from '@/pages/settings/SettingsPage';
 import { AuthProvider }           from '@/context/AuthContext';
@@ -33,7 +33,7 @@ const router = createBrowserRouter([
           { path: '/dashboard',            element: <DashboardPage /> },
           { path: '/content-manager',      element: <ContentManagerPage /> },
           { path: '/pages/:pageId/edit',   element: <PageEditPage /> },
-          { path: '/content-type-builder', element: <ContentTypeBuilderPage /> },
+          { path: '/block-gallery',        element: <ContentTypeBuilderPage /> },
           { path: '/media-library',        element: <MediaLibraryPage /> },
           { path: '/settings',             element: <SettingsPage /> },
         ],

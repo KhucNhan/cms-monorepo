@@ -38,9 +38,9 @@ export function BlockSectionCard({
             <span className="text-label-md font-bold text-on-surface capitalize">
               {block.type.replace('-', ' ')} Block
             </span>
-            <span className="ml-md text-[11px] text-on-surface-variant font-mono bg-surface-container px-xs rounded py-0.5">
+            {/* <span className="ml-md text-[11px] text-on-surface-variant font-mono bg-surface-container px-xs rounded py-0.5">
               ID: {block.id.slice(0, 8)}
-            </span>
+            </span> */}
           </div>
         </div>
 
