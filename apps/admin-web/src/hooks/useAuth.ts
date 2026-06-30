@@ -12,24 +12,35 @@ interface AuthState {
 
 export function useAuth() {
     const navigate = useNavigate();
+
     const [state, setState] = useState<AuthState>({
         user: null,
-        loading: !!tokenStorage.get(),
+        loading: false, // chỉ dùng cho login() submit, KHÔNG dựa vào tokenStorage lúc init
         error: null,
     });
+
+    // Cờ riêng cho việc verify token cũ lúc app mount — không liên quan tới form login
+    const [hydrating, setHydrating] = useState<boolean>(!!tokenStorage.get());
 
     // ── Hydrate current user on mount ────────────────────────────────────────
     useEffect(() => {
         const token = tokenStorage.get();
-        if (!token) return;
+        if (!token) {
+            setHydrating(false);
+            return;
+        }
 
-        setState((s) => ({ ...s, loading: true }));
         authApi
             .me()
-            .then((user) => setState({ user, loading: false, error: null }))
+            .then((user) => {
+                setState((s) => ({ ...s, user, error: null }));
+            })
             .catch(() => {
                 tokenStorage.clear();
-                setState({ user: null, loading: false, error: null });
+                setState((s) => ({ ...s, user: null, error: null }));
+            })
+            .finally(() => {
+                setHydrating(false);
             });
     }, []);
 
@@ -67,5 +78,11 @@ export function useAuth() {
         }
     }, [navigate]);
 
-    return { ...state, login, logout, isAuthenticated: !!state.user };
+    return {
+        ...state,
+        hydrating,
+        login,
+        logout,
+        isAuthenticated: !!state.user,
+    };
 }
