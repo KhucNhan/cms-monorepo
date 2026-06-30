@@ -33,8 +33,6 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
   const handleLogout = async () => {
     try {
       await logout();
-      // redirect về login
-      window.location.href = '/login';
     } catch (error) {
       console.error(error);
     }
