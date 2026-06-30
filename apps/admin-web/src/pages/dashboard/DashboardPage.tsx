@@ -66,7 +66,7 @@ const QUICK_ACTIONS = [
     iconColor: 'text-on-secondary-container',
     title: 'Add new Entry',
     sub: 'Populate your collections',
-    href: '/content-manager',
+    href: '/content-manager?create=true',
   },
   // {
   //   icon: 'menu_book',

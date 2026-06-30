@@ -6,6 +6,8 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-manager/components/CreatePageModal';
 import type { Page, VersionStatus } from '@/types';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,14 @@ export function ContentManagerPage() {
     pageSize: 20,
     search: search.trim() || undefined,
   });
+
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setIsCreateModalOpen(true);
+    }
+  }, [searchParams]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
