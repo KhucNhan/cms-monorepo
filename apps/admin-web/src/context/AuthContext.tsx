@@ -11,6 +11,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
+  hydrating: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -20,22 +21,34 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+
   const [state, setState] = useState<AuthState>({
     user: null,
-    loading: !!tokenStorage.get(), // true ngay từ đầu nếu có token
+    loading: false, // chỉ dùng cho login() submit, KHÔNG dựa vào tokenStorage lúc init
     error: null,
   });
 
+  // Cờ riêng cho việc verify token cũ lúc app mount — không liên quan tới form login
+  const [hydrating, setHydrating] = useState<boolean>(!!tokenStorage.get());
+
   useEffect(() => {
     const token = tokenStorage.get();
-    if (!token) return;
+    if (!token) {
+      setHydrating(false);
+      return;
+    }
 
     authApi
       .me()
-      .then((user) => setState({ user, loading: false, error: null }))
+      .then((user) => {
+        setState((s) => ({ ...s, user, error: null }));
+      })
       .catch(() => {
         tokenStorage.clear();
-        setState({ user: null, loading: false, error: null });
+        setState((s) => ({ ...s, user: null, error: null }));
+      })
+      .finally(() => {
+        setHydrating(false);
       });
   }, []);
 
@@ -66,7 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [navigate]);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, isAuthenticated: !!state.user }}>
+    <AuthContext.Provider
+      value={{ ...state, hydrating, login, logout, isAuthenticated: !!state.user }}
+    >
       {children}
     </AuthContext.Provider>
   );
