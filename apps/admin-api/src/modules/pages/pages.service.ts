@@ -26,6 +26,7 @@ export const updatePageSchema = z.object({
 export const listPagesSchema = z.object({
   page:     z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search:   z.string().optional(),
 });
 
 export type CreatePageDto = z.infer<typeof createPageSchema>;
@@ -35,12 +36,17 @@ export type UpdatePageDto = z.infer<typeof updatePageSchema>;
 export class PagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(params: { page: number; pageSize: number }) {
-    const { page, pageSize } = params;
+  async findAll(params: { page: number; pageSize: number; search?: string }) {
+    const { page, pageSize, search } = params;
     const skip = (page - 1) * pageSize;
+    const trimmedSearch = search?.trim();
+    const where = trimmedSearch
+      ? { slug: { contains: trimmedSearch, mode: 'insensitive' as const } }
+      : {};
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.page.findMany({
+        where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
@@ -49,7 +55,7 @@ export class PagesService {
           _count: { select: { versions: true } },
         },
       }),
-      this.prisma.page.count(),
+      this.prisma.page.count({ where }),
     ]);
 
     return {

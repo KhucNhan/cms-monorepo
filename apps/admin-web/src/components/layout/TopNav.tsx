@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/config/cn';
 import { useAuth } from '@/hooks/useAuth';
 
 interface TopNavProps {
   title: string;
   breadcrumb?: { label: string; highlight?: string };
-  actions?: React.ReactNode;
+  actions?: ReactNode;
 }
 
 export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
-  const [searchFocused, setSearchFocused] = useState(false);
   const [openUserMenu, setOpenUserMenu] = useState(false);
   const { logout } = useAuth();
 
@@ -41,7 +40,7 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
   return (
     <header className="fixed top-0 right-0 w-[calc(100%-240px)] h-16 bg-surface border-b border-outline-variant shadow-sm flex items-center justify-between px-md z-40">
       {/* Left */}
-      <div className="flex items-center gap-md flex-1 min-w-0">
+      <div className="flex items-center gap-md !w-[210px] min-w-0">
         <div className="flex items-center gap-sm flex-shrink-0">
           <h3 className="text-h3 font-h3 text-on-surface whitespace-nowrap">
             {title}
@@ -67,34 +66,16 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
           )}
         </div>
 
-        {/* Search */}
-        <div
-          className={cn(
-            'max-w-md relative group transition-all duration-200',
-            searchFocused ? 'w-96' : 'w-64',
-          )}
-        >
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px] transition-colors group-focus-within:text-primary pointer-events-none">
-            search
-          </span>
-
-          <input
-            type="text"
-            placeholder="Search for content..."
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
-          />
-        </div>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-md flex-shrink-0">
-        {actions && (
-          <div className="flex items-center gap-sm">
+      {actions && (
+          <div className="flex items-center w-full !justify-between px-[20px] gap-sm">
             {actions}
           </div>
         )}
+
+      {/* Right */}
+      <div className="flex items-center gap-md flex-shrink-0">
 
         {/* Icons */}
         {/* <div className="flex items-center gap-1">

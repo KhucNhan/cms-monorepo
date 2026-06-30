@@ -122,6 +122,7 @@ export interface PageDetail extends Omit<Page, '_count'> {
 export interface PageFilters {
   page?: number;
   pageSize?: number;
+  search?: string;
 }
 
 // ─── Media ───────────────────────────────────────────────────────────────────
@@ -139,6 +140,7 @@ export interface MediaFilters {
   page?: number;
   pageSize?: number;
   mimeType?: string;
+  search?: string;
 }
 
 // ─── Legacy Content types (giữ để không break Badge, content.api, useContentEntries) ──

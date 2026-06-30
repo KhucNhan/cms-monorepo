@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast, ToastContainer } from '@/components/ui/Toast';
 import { cn } from '@/config/cn';
 import { getAllBlockDefinitions } from '@cms/block-registry';
@@ -66,11 +67,20 @@ export function ContentTypeBuilderPage() {
 
   const [types, setTypes]               = useState<ContentType[]>(registryTypes);
   const [activeTypeId, setActiveTypeId] = useState<string>(registryTypes[0]?.id ?? '');
+  const [search, setSearch] = useState('');
   const [selectedField, setSelectedField] = useState<ContentField | null>(null);
   const [dragId, setDragId]             = useState<string | null>(null);
   const { toasts, addToast, removeToast } = useToast();
 
   const activeType = types.find((t) => t.id === activeTypeId);
+  const filteredTypes = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return types;
+    return types.filter((type) =>
+      type.name.toLowerCase().includes(term) ||
+      type.apiId?.toLowerCase().includes(term),
+    );
+  }, [search, types]);
 
   if (!activeType) {
     return (
@@ -113,12 +123,13 @@ export function ContentTypeBuilderPage() {
     <AppLayout
       title="Block Gallery"
       // breadcrumb={{ label: 'Content-Type Builder', highlight: activeType.name }}
-      // actions={
-      //   <>
-      //     <Button variant="secondary" size="md">Cancel</Button>
-      //     <Button variant="primary"   size="md" onClick={handleSave}>Save Changes</Button>
-      //   </>
-      // }
+      actions={
+        <SearchInput
+          placeholder="Search blocks..."
+          value={search}
+          onChange={setSearch}
+        />
+      }
     >
       <div className="flex h-[calc(100vh-64px)] overflow-hidden">
         {/* ── Left panel: Block Types list ── */}
@@ -137,7 +148,7 @@ export function ContentTypeBuilderPage() {
           </div>
 
           <ul className="flex flex-col flex-1">
-            {types.map((type) => (
+            {filteredTypes.map((type) => (
               <li key={type.id}>
                 <button
                   onClick={() => { setActiveTypeId(type.id); setSelectedField(null); }}

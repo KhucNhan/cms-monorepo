@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-manager/components/CreatePageModal';
 import type { Page, VersionStatus } from '@/types';
@@ -11,13 +12,20 @@ import type { Page, VersionStatus } from '@/types';
 export function ContentManagerPage() {
   const navigate    = useNavigate();
   const [page, setPage]       = useState(1);
+  const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const { pages, total, loading, error, refetch, deletePage } = usePages({
     page,
     pageSize: 20,
+    search: search.trim() || undefined,
   });
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -31,9 +39,16 @@ export function ContentManagerPage() {
     <AppLayout
       title="Content Manager"
       actions={
-        <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
-          New Page
-        </Button>
+        <>
+          <SearchInput
+            placeholder="Search pages..."
+            value={search}
+            onChange={handleSearchChange}
+          />
+          <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
+            New Page
+          </Button>
+        </>
       }
     >
       <div className="p-xl">

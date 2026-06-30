@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useMedia } from '@/hooks/useMedia';
+import { mediaApi } from '@/api/media.api';
+import { ApiClientError } from '@/api/client';
 import type { MediaItem } from '@/types';
+
+const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
 
 interface MediaPickerModalProps {
   onSelect: (media: MediaItem) => void;
@@ -10,24 +14,124 @@ interface MediaPickerModalProps {
 
 export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) {
   const [page, setPage] = useState(1);
-  const { media, total, loading, error, refetch } = useMedia({ page, pageSize: 24 });
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const { media, total, loading, error, refetch } = useMedia({
+    page,
+    pageSize: 24,
+    search: searchQuery || undefined,
+  });
 
   const totalPages = Math.ceil(total / 24);
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    try {
+      for (const file of Array.from(files)) {
+        await mediaApi.upload(file);
+      }
+      setPage(1);
+      await refetch();
+      setUploadSuccess(`Uploaded ${files.length} file(s) successfully`);
+    } catch (err) {
+      const msg = err instanceof ApiClientError ? err.message : 'Upload failed.';
+      setUploadError(msg);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const isEmpty = !loading && !error && media.length === 0;
+  const emptyMessage = searchQuery
+    ? `No images matching "${searchQuery}"`
+    : 'No media files yet. Upload an image below.';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full max-w-3xl mx-md max-h-[85vh] flex flex-col">
-        <div className="flex justify-between items-center p-lg border-b border-outline-variant">
-          <div>
+        <div className="flex justify-between items-center p-lg border-b border-outline-variant gap-md">
+          <div className="min-w-0">
             <h3 className="text-h3 font-h3 text-on-surface">Choose from Media Library</h3>
-            <p className="text-body-md text-on-surface-variant mt-xs">Select an image or SVG</p>
+            <p className="text-body-md text-on-surface-variant mt-xs">Select an image or upload a new one</p>
           </div>
-          <button
-            onClick={onCancel}
-            className="p-1 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant"
-          >
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
+          <div className="flex items-center gap-sm shrink-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES}
+              multiple
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files)}
+            />
+            <Button
+              variant="primary"
+              icon="upload"
+              size="sm"
+              loading={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Upload
+            </Button>
+            <button
+              onClick={onCancel}
+              className="p-1 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="px-lg pt-md pb-sm border-b border-outline-variant">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant pointer-events-none">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by filename…"
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-sm py-2 text-body-md focus:border-primary outline-none"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput('')}
+                className="absolute right-sm top-1/2 -translate-y-1/2 p-0.5 hover:bg-surface-container-high rounded-full text-on-surface-variant"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            )}
+          </div>
+          {uploadError && (
+            <p className="text-label-sm text-error mt-sm flex items-center gap-xs">
+              <span className="material-symbols-outlined text-[16px]">error</span>
+              {uploadError}
+            </p>
+          )}
+          {uploadSuccess && (
+            <p className="text-label-sm text-primary mt-sm flex items-center gap-xs">
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              {uploadSuccess}
+            </p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-lg">
@@ -49,10 +153,20 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
             </div>
           )}
 
-          {!loading && !error && media.length === 0 && (
+          {isEmpty && (
             <div className="flex flex-col items-center p-xl text-on-surface-variant text-center">
               <span className="material-symbols-outlined text-[48px] mb-md">perm_media</span>
-              <p>No media files yet. Upload some in the Media Library first.</p>
+              <p className="mb-md">{emptyMessage}</p>
+              {!searchQuery && (
+                <Button
+                  variant="primary"
+                  icon="upload"
+                  loading={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload Image
+                </Button>
+              )}
             </div>
           )}
 
@@ -64,12 +178,16 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
                   type="button"
                   onClick={() => onSelect(item)}
                   className="group relative aspect-square bg-surface-container rounded-lg border border-outline-variant overflow-hidden hover:border-primary hover:ring-2 hover:ring-primary/30 transition-all"
+                  title={item.key}
                 >
                   <img
                     src={item.url}
                     alt={item.key}
                     className="w-full h-full object-cover"
                   />
+                  <div className="absolute inset-x-0 bottom-0 bg-black/50 px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-[10px] text-white truncate">{item.key.split('/').pop()}</p>
+                  </div>
                   <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors" />
                 </button>
               ))}
