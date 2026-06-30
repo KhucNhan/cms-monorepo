@@ -3,7 +3,9 @@ import type { PageVersion } from '@/types';
 
 export const pageVersionsApi = {
   findDraft: (pageId: string) =>
-    apiClient.get<PageVersion | null>(`/page-versions?pageId=${pageId}`),
+    apiClient.get<PageVersion | null>(
+    `/page-versions?pageId=${pageId}&status=DRAFT`  // ← thêm &status=DRAFT
+  ),
 
   fork: (versionId: string) =>
     apiClient.post<PageVersion>(`/page-versions/${versionId}/fork`, {}),

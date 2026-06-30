@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast, ToastContainer } from '@/components/ui/Toast';
 import { cn } from '@/config/cn';
@@ -92,7 +91,7 @@ export function ContentTypeBuilderPage() {
     );
   }
 
-  const handleSave = () => addToast(`Saved "${activeType.name}" content type.`, 'success');
+  // const handleSave = () => addToast(`Saved "${activeType.name}" content type.`, 'success');
 
   const handleDeleteField = (fieldId: string) => {
     setTypes((prev) =>
@@ -106,18 +105,18 @@ export function ContentTypeBuilderPage() {
     addToast('Field removed.', 'info');
   };
 
-  const handleFieldChange = (key: keyof ContentField, value: unknown) => {
-    if (!selectedField) return;
-    const updated = { ...selectedField, [key]: value };
-    setSelectedField(updated);
-    setTypes((prev) =>
-      prev.map((t) =>
-        t.id === activeTypeId
-          ? { ...t, fields: t.fields.map((f) => (f.id === selectedField.id ? updated : f)) }
-          : t,
-      ),
-    );
-  };
+  // const handleFieldChange = (key: keyof ContentField, value: unknown) => {
+  //   if (!selectedField) return;
+  //   const updated = { ...selectedField, [key]: value };
+  //   setSelectedField(updated);
+  //   setTypes((prev) =>
+  //     prev.map((t) =>
+  //       t.id === activeTypeId
+  //         ? { ...t, fields: t.fields.map((f) => (f.id === selectedField.id ? updated : f)) }
+  //         : t,
+  //     ),
+  //   );
+  // };
 
   return (
     <AppLayout
@@ -257,7 +256,7 @@ interface FieldRowProps {
   onDragEnd: () => void;
 }
 
-function FieldRow({ field, isSelected, isDragging, onSelect, onDelete, onDragStart, onDragEnd }: FieldRowProps) {
+function FieldRow({ field, isSelected, isDragging, onSelect, onDragStart, onDragEnd }: FieldRowProps) {
   const meta = FIELD_TYPE_META[field.type] ?? FIELD_TYPE_META['text'];
 
   return (
@@ -463,35 +462,35 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDelete, onDragSta
 
 // ─── ToggleRow ────────────────────────────────────────────────────────────────
 
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center justify-between cursor-pointer group select-none">
-      <span className="text-body-md text-on-surface group-hover:text-primary transition-colors">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20',
-          checked ? 'bg-primary' : 'bg-outline-variant',
-        )}
-      >
-        <span
-          className={cn(
-            'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200',
-            checked ? 'translate-x-6' : 'translate-x-1',
-          )}
-        />
-      </button>
-    </label>
-  );
-}
+// function ToggleRow({
+//   label,
+//   checked,
+//   onChange,
+// }: {
+//   label: string;
+//   checked: boolean;
+//   onChange: (v: boolean) => void;
+// }) {
+//   return (
+//     <label className="flex items-center justify-between cursor-pointer group select-none">
+//       <span className="text-body-md text-on-surface group-hover:text-primary transition-colors">{label}</span>
+//       <button
+//         type="button"
+//         role="switch"
+//         aria-checked={checked}
+//         onClick={() => onChange(!checked)}
+//         className={cn(
+//           'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20',
+//           checked ? 'bg-primary' : 'bg-outline-variant',
+//         )}
+//       >
+//         <span
+//           className={cn(
+//             'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200',
+//             checked ? 'translate-x-6' : 'translate-x-1',
+//           )}
+//         />
+//       </button>
+//     </label>
+//   );
+// }

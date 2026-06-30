@@ -10,12 +10,6 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/settings',             label: 'Settings',             icon: 'settings' },
 ];
 
-const MOCK_USER = {
-  name:   'Alex Rivers',
-  role:   'Super Admin',
-  initials: 'AR',
-};
-
 export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-sidebar_width bg-on-secondary-fixed flex flex-col z-50">

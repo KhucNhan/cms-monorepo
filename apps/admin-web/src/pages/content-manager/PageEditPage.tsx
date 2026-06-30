@@ -110,33 +110,33 @@ export function PageEditPage() {
   //   draftOriginal  — the unedited blocks from DB (for dirty comparison)
   //   wasForked      — true when a new DRAFT was created in this call
   const ensureDraftVersion = async (
-    currentUIBlocks: Block[],
-  ): Promise<{
-    draft: PageVersion;
-    blocksToSave: Block[];
-    draftOriginal: Block[];
-    wasForked: boolean;
-  }> => {
-    if (!currentVersion) throw new Error('No active version loaded.');
+  currentUIBlocks: Block[],
+): Promise<{
+  draft: PageVersion;
+  blocksToSave: Block[];
+  draftOriginal: Block[];
+  wasForked: boolean;
+}> => {
+  if (!currentVersion || !page) throw new Error('No active version loaded.');
 
-    if (currentVersion.status === 'DRAFT') {
-      return {
-        draft: currentVersion,
-        blocksToSave: currentUIBlocks,
-        draftOriginal: originalBlocks,
-        wasForked: false,
-      };
-    }
+  // Case 1: đang ở DRAFT → dùng luôn, không tạo mới
+  if (currentVersion.status === 'DRAFT') {
+    return {
+      draft: currentVersion,
+      blocksToSave: currentUIBlocks,
+      draftOriginal: originalBlocks,
+      wasForked: false,
+    };
+  }
 
-    // Version is PUBLISHED — fork into a new DRAFT on demand
-    const newDraft = await pageVersionsApi.fork(currentVersion.id);
+  // Case 2: đang ở PUBLISHED → kiểm tra đã có DRAFT chưa
+  const existingDraft = await pageVersionsApi.findDraft(page.id);
 
-    // Fetch the cloned blocks for the new draft (they have NEW IDs)
-    const draftBlocksData = await blocksApi.getByVersion(newDraft.id);
+  if (existingDraft) {
+    // Đã có DRAFT → dùng lại, không fork
+    const draftBlocksData = await blocksApi.getByVersion(existingDraft.id);
     const draftOriginal = [...draftBlocksData].sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // Build a map: originalBlockId → the corresponding new draft block
-    // The fork preserves order, so originalBlocks[i] ↔ draftOriginal[i]
     const idToNewDraftBlock = new Map<string, Block>();
     originalBlocks.forEach((origBlock, idx) => {
       if (draftOriginal[idx]) {
@@ -144,23 +144,40 @@ export function PageEditPage() {
       }
     });
 
-    // Traverse currentUIBlocks in the USER'S order (may be reordered),
-    // substitute each block with its new draft counterpart, and carry over
-    // any data edits.  This is the only correct way to preserve both the
-    // reorder AND the content edits from the UI.
     const blocksToSave = currentUIBlocks.map((uiBlock, idx) => {
-      const newDraftBlock = idToNewDraftBlock.get(uiBlock.id);
-      if (newDraftBlock) {
-        return { ...newDraftBlock, data: uiBlock.data, orderIndex: idx };
+      const draftBlock = idToNewDraftBlock.get(uiBlock.id);
+      if (draftBlock) {
+        return { ...draftBlock, data: uiBlock.data, orderIndex: idx };
       }
-      // Fallback: block was added after last save and has no draft counterpart
       return { ...uiBlock, orderIndex: idx };
     });
 
-    // NOTE: do NOT call setBlocks / setCurrentVersion / setOriginalBlocks here.
-    // The caller is responsible for state updates AFTER all API calls succeed.
-    return { draft: newDraft, blocksToSave, draftOriginal, wasForked: true };
-  };
+    return { draft: existingDraft, blocksToSave, draftOriginal, wasForked: false };
+  }
+
+  // Case 3: chưa có DRAFT nào → fork từ PUBLISHED (chỉ xảy ra 1 lần duy nhất)
+  const newDraft = await pageVersionsApi.fork(currentVersion.id);
+
+  const draftBlocksData = await blocksApi.getByVersion(newDraft.id);
+  const draftOriginal = [...draftBlocksData].sort((a, b) => a.orderIndex - b.orderIndex);
+
+  const idToNewDraftBlock = new Map<string, Block>();
+  originalBlocks.forEach((origBlock, idx) => {
+    if (draftOriginal[idx]) {
+      idToNewDraftBlock.set(origBlock.id, draftOriginal[idx]);
+    }
+  });
+
+  const blocksToSave = currentUIBlocks.map((uiBlock, idx) => {
+    const newDraftBlock = idToNewDraftBlock.get(uiBlock.id);
+    if (newDraftBlock) {
+      return { ...newDraftBlock, data: uiBlock.data, orderIndex: idx };
+    }
+    return { ...uiBlock, orderIndex: idx };
+  });
+
+  return { draft: newDraft, blocksToSave, draftOriginal, wasForked: true };
+};
 
   // ─── 2. Add Block ──────────────────────────────────────────────────────────
   const handleAddBlock = async (type: string) => {
@@ -326,11 +343,11 @@ export function PageEditPage() {
     saveAllChanges();
   };
 
-  const handleDiscard = () => {
-    setBlocks(JSON.parse(JSON.stringify(originalBlocks)));
-    updateIsDirty(false);
-    addToast('Unsaved changes discarded', 'info');
-  };
+  // const handleDiscard = () => {
+  //   setBlocks(JSON.parse(JSON.stringify(originalBlocks)));
+  //   updateIsDirty(false);
+  //   addToast('Unsaved changes discarded', 'info');
+  // };
 
   // ─── 7. Publish Action ─────────────────────────────────────────────────────
   const handlePublish = async () => {
