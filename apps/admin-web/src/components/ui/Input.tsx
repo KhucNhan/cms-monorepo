@@ -1,67 +1,109 @@
-import { forwardRef, type InputHTMLAttributes } from 'react';
+// src/components/ui/Input.tsx
+
+import * as React from 'react';
+import { Search, X } from 'lucide-react';
+
 import { cn } from '@/config/cn';
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   helperText?: string;
   error?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   iconPosition?: 'left' | 'right';
   onIconClick?: () => void;
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, helperText, error, icon, iconPosition = 'left', onIconClick, className, id, ...props }, ref) => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+const inputBaseClass = cn(
+  'flex h-10 w-full rounded-md border border-outline bg-surface px-3 py-2 text-sm text-on-surface',
+  'placeholder:text-on-surface-variant',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+  'disabled:cursor-not-allowed disabled:opacity-50',
+  'transition-colors',
+);
+
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  (
+    {
+      className,
+      type = 'text',
+      label,
+      helperText,
+      error,
+      icon,
+      iconPosition = 'left',
+      onIconClick,
+      disabled,
+      ...props
+    },
+    ref,
+  ) => {
+    const hasLeftIcon = icon && iconPosition === 'left';
+    const hasRightIcon = icon && iconPosition === 'right';
 
     return (
-      <div className="flex flex-col gap-1">
+      <div className="w-full">
         {label && (
-          <label
-            htmlFor={inputId}
-            className="block text-label-md font-label-md text-on-surface-variant uppercase tracking-wider"
-          >
+          <label className="mb-1.5 block text-sm font-medium text-on-surface">
             {label}
           </label>
         )}
 
-        <div className="relative group">
-          {icon && iconPosition === 'left' && (
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px] transition-colors group-focus-within:text-primary pointer-events-none">
+        <div className="relative">
+          {hasLeftIcon && (
+            <button
+              type="button"
+              onClick={onIconClick}
+              disabled={!onIconClick}
+              className={cn(
+                'absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant',
+                onIconClick && 'cursor-pointer',
+              )}
+            >
               {icon}
-            </span>
+            </button>
           )}
 
           <input
             ref={ref}
-            id={inputId}
+            type={type}
+            disabled={disabled}
             className={cn(
-              'w-full bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md',
-              'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
-              'placeholder:text-outline transition-all duration-200',
-              'px-md py-3',
-              icon && iconPosition === 'left'  && 'pl-10',
-              icon && iconPosition === 'right' && 'pr-10',
-              error && 'border-error focus:ring-error/20',
+              inputBaseClass,
+              error && 'border-error focus-visible:ring-error',
+              hasLeftIcon && 'pl-10',
+              hasRightIcon && 'pr-10',
               className,
             )}
             {...props}
           />
 
-          {icon && iconPosition === 'right' && (
+          {hasRightIcon && (
             <button
               type="button"
               onClick={onIconClick}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors focus:outline-none"
+              disabled={!onIconClick}
+              className={cn(
+                'absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant',
+                onIconClick && 'cursor-pointer',
+              )}
             >
-              <span className="material-symbols-outlined text-[20px]">{icon}</span>
+              {icon}
             </button>
           )}
         </div>
 
         {(helperText || error) && (
-          <p className={cn('text-[11px]', error ? 'text-error' : 'text-on-surface-variant')}>
-            {error ?? helperText}
+          <p
+            className={cn(
+              'mt-1 text-xs',
+              error
+                ? 'text-error'
+                : 'text-on-surface-variant',
+            )}
+          >
+            {error || helperText}
           </p>
         )}
       </div>
