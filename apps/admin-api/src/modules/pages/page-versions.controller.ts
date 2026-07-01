@@ -30,6 +30,12 @@ export class PageVersionsController {
     return this.pageVersionsService.findDraft(pageId);
   }
 
+  @Get('archived')
+  @ApiOperation({ summary: 'List ARCHIVED versions. Pass ?pageId= to filter by page, omit for all pages.' })
+  findArchived(@Query('pageId') pageId?: string) {
+    return this.pageVersionsService.findArchived(pageId);
+  }
+
   @Post(':id/fork')
   @RequirePermissions('page:create')
   @ApiOperation({ summary: 'Fork a published version into a new draft' })
@@ -42,8 +48,18 @@ export class PageVersionsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('page:delete')
-  @ApiOperation({ summary: 'Delete a DRAFT version (orphan cleanup)' })
-  deleteDraft(@Param('id') id: string) {
-    return this.pageVersionsService.deleteDraft(id);
+  @ApiOperation({ summary: 'Delete a DRAFT or ARCHIVED version' })
+  deleteVersion(@Param('id') id: string) {
+    return this.pageVersionsService.deleteVersion(id);
+  }
+
+  @Post(':id/revert')
+  @RequirePermissions('page:create')
+  @ApiOperation({ summary: 'Revert page to a PUBLISHED version — deletes current DRAFT and clones target as new DRAFT' })
+  revert(
+    @Param('id') id: string,
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.pageVersionsService.revertToVersion(id, req.user.sub);
   }
 }

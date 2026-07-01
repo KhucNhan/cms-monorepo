@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useMedia } from '@/hooks/useMedia';
 import { ApiClientError } from '@/api/client';
@@ -10,6 +11,7 @@ const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml'
 
 export function MediaLibraryPage() {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -18,9 +20,15 @@ export function MediaLibraryPage() {
   const { media, total, loading, error, refetch, deleteMedia, uploadMedia } = useMedia({
     page,
     pageSize: 24,
+    search: search.trim() || undefined,
   });
 
   const totalPages = Math.ceil(total / 24);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -57,6 +65,11 @@ export function MediaLibraryPage() {
       title="Media Library"
       actions={
         <>
+          <SearchInput
+            placeholder="Search media..."
+            value={search}
+            onChange={handleSearchChange}
+          />
           <input
             ref={fileInputRef}
             type="file"

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-manager/components/CreatePageModal';
 import type { Page, VersionStatus } from '@/types';
@@ -9,15 +10,30 @@ import type { Page, VersionStatus } from '@/types';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ContentManagerPage() {
-  const navigate    = useNavigate();
-  const [page, setPage]       = useState(1);
+  const navigate                = useNavigate();
+  const [page, setPage]         = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [search, setSearch]     = useState('');
 
-  const { pages, total, loading, error, refetch, deletePage } = usePages({
+  // Fetch tất cả, không truyền search — filter client-side như VersionArchivePage
+  const { pages: allPages, total, loading, error, refetch, deletePage } = usePages({
     page,
     pageSize: 20,
   });
+
+  // Filter client-side, không gọi lại API
+  const pages = search.trim()
+    ? allPages.filter((p) => p.slug.toLowerCase().includes(search.trim().toLowerCase()))
+    : allPages;
+
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setIsCreateModalOpen(true);
+    }
+  }, [searchParams]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -31,9 +47,16 @@ export function ContentManagerPage() {
     <AppLayout
       title="Content Manager"
       actions={
-        <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
-          New Page
-        </Button>
+        <>
+          <SearchInput
+            placeholder="Search pages..."
+            value={search}
+            onChange={setSearch}
+          />
+          <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
+            New Page
+          </Button>
+        </>
       }
     >
       <div className="p-xl">
@@ -201,7 +224,7 @@ function PageRow({
             <p className="text-[14px] font-semibold text-on-background truncate max-w-[280px]">
               /{page.slug}
             </p>
-            <p className="text-[11px] text-on-surface-variant font-mono">{page.id.slice(0, 8)}…</p>
+            {/* <p className="text-[11px] text-on-surface-variant font-mono">{page.id.slice(0, 8)}…</p> */}
           </div>
         </div>
       </td>

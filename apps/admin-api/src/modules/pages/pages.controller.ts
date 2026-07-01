@@ -40,7 +40,7 @@ export class PagesController {
 
   @Get()
   @ApiOperation({ summary: 'List all pages (paginated)' })
-  findAll(@Query(new ZodValidationPipe(listPagesSchema)) query: { page: number; pageSize: number }) {
+  findAll(@Query(new ZodValidationPipe(listPagesSchema)) query: { page: number; pageSize: number; search?: string }) {
     return this.pagesService.findAll(query);
   }
 

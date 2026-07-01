@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Block } from '@/types';
 import { BlockDataForm } from './BlockDataForm';
 
@@ -24,7 +25,9 @@ export function BlockSectionCard({
   onDelete,
   onUpdateData,
 }: BlockSectionCardProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const icon = ICON_MAP[block.type] ?? 'widgets';
+  const bodyId = `block-section-${block.id}`;
 
   return (
     <div className="bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
@@ -38,14 +41,29 @@ export function BlockSectionCard({
             <span className="text-label-md font-bold text-on-surface capitalize">
               {block.type.replace('-', ' ')} Block
             </span>
-            <span className="ml-md text-[11px] text-on-surface-variant font-mono bg-surface-container px-xs rounded py-0.5">
+            {/* <span className="ml-md text-[11px] text-on-surface-variant font-mono bg-surface-container px-xs rounded py-0.5">
               ID: {block.id.slice(0, 8)}
-            </span>
+            </span> */}
           </div>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-xs">
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((current) => !current)}
+            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all cursor-pointer"
+            title={isCollapsed ? 'Expand Block' : 'Collapse Block'}
+            aria-expanded={!isCollapsed}
+            aria-controls={bodyId}
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {isCollapsed ? 'expand_more' : 'expand_less'}
+            </span>
+          </button>
+
+          <div className="w-px h-5 bg-outline-variant mx-1" />
+
           <button
             type="button"
             disabled={index === 0}
@@ -80,13 +98,15 @@ export function BlockSectionCard({
       </div>
 
       {/* Body / Data Editors */}
-      <div className="p-lg bg-surface">
-        <BlockDataForm
-          type={block.type}
-          data={block.data}
-          onChange={onUpdateData}
-        />
-      </div>
+      {!isCollapsed && (
+        <div id={bodyId} className="p-lg bg-surface">
+          <BlockDataForm
+            type={block.type}
+            data={block.data}
+            onChange={onUpdateData}
+          />
+        </div>
+      )}
     </div>
   );
 }

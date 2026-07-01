@@ -29,6 +29,11 @@ export function PageEditPage() {
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [pendingRevertVersion, setPendingRevertVersion] = useState<{ id: string; createdAt: string } | null>(null);
+  const [showDiscardDraftConfirm, setShowDiscardDraftConfirm] = useState(false);
+  const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
 
   // Synchronous ref tracking for React Router blocker evaluation
   const isDirtyRef = useRef(false);
@@ -110,33 +115,33 @@ export function PageEditPage() {
   //   draftOriginal  — the unedited blocks from DB (for dirty comparison)
   //   wasForked      — true when a new DRAFT was created in this call
   const ensureDraftVersion = async (
-    currentUIBlocks: Block[],
-  ): Promise<{
-    draft: PageVersion;
-    blocksToSave: Block[];
-    draftOriginal: Block[];
-    wasForked: boolean;
-  }> => {
-    if (!currentVersion) throw new Error('No active version loaded.');
+  currentUIBlocks: Block[],
+): Promise<{
+  draft: PageVersion;
+  blocksToSave: Block[];
+  draftOriginal: Block[];
+  wasForked: boolean;
+}> => {
+  if (!currentVersion || !page) throw new Error('No active version loaded.');
 
-    if (currentVersion.status === 'DRAFT') {
-      return {
-        draft: currentVersion,
-        blocksToSave: currentUIBlocks,
-        draftOriginal: originalBlocks,
-        wasForked: false,
-      };
-    }
+  // Case 1: đang ở DRAFT → dùng luôn, không tạo mới
+  if (currentVersion.status === 'DRAFT') {
+    return {
+      draft: currentVersion,
+      blocksToSave: currentUIBlocks,
+      draftOriginal: originalBlocks,
+      wasForked: false,
+    };
+  }
 
-    // Version is PUBLISHED — fork into a new DRAFT on demand
-    const newDraft = await pageVersionsApi.fork(currentVersion.id);
+  // Case 2: đang ở PUBLISHED → kiểm tra đã có DRAFT chưa
+  const existingDraft = await pageVersionsApi.findDraft(page.id);
 
-    // Fetch the cloned blocks for the new draft (they have NEW IDs)
-    const draftBlocksData = await blocksApi.getByVersion(newDraft.id);
+  if (existingDraft) {
+    // Đã có DRAFT → dùng lại, không fork
+    const draftBlocksData = await blocksApi.getByVersion(existingDraft.id);
     const draftOriginal = [...draftBlocksData].sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // Build a map: originalBlockId → the corresponding new draft block
-    // The fork preserves order, so originalBlocks[i] ↔ draftOriginal[i]
     const idToNewDraftBlock = new Map<string, Block>();
     originalBlocks.forEach((origBlock, idx) => {
       if (draftOriginal[idx]) {
@@ -144,23 +149,40 @@ export function PageEditPage() {
       }
     });
 
-    // Traverse currentUIBlocks in the USER'S order (may be reordered),
-    // substitute each block with its new draft counterpart, and carry over
-    // any data edits.  This is the only correct way to preserve both the
-    // reorder AND the content edits from the UI.
     const blocksToSave = currentUIBlocks.map((uiBlock, idx) => {
-      const newDraftBlock = idToNewDraftBlock.get(uiBlock.id);
-      if (newDraftBlock) {
-        return { ...newDraftBlock, data: uiBlock.data, orderIndex: idx };
+      const draftBlock = idToNewDraftBlock.get(uiBlock.id);
+      if (draftBlock) {
+        return { ...draftBlock, data: uiBlock.data, orderIndex: idx };
       }
-      // Fallback: block was added after last save and has no draft counterpart
       return { ...uiBlock, orderIndex: idx };
     });
 
-    // NOTE: do NOT call setBlocks / setCurrentVersion / setOriginalBlocks here.
-    // The caller is responsible for state updates AFTER all API calls succeed.
-    return { draft: newDraft, blocksToSave, draftOriginal, wasForked: true };
-  };
+    return { draft: existingDraft, blocksToSave, draftOriginal, wasForked: false };
+  }
+
+  // Case 3: chưa có DRAFT nào → fork từ PUBLISHED (chỉ xảy ra 1 lần duy nhất)
+  const newDraft = await pageVersionsApi.fork(currentVersion.id);
+
+  const draftBlocksData = await blocksApi.getByVersion(newDraft.id);
+  const draftOriginal = [...draftBlocksData].sort((a, b) => a.orderIndex - b.orderIndex);
+
+  const idToNewDraftBlock = new Map<string, Block>();
+  originalBlocks.forEach((origBlock, idx) => {
+    if (draftOriginal[idx]) {
+      idToNewDraftBlock.set(origBlock.id, draftOriginal[idx]);
+    }
+  });
+
+  const blocksToSave = currentUIBlocks.map((uiBlock, idx) => {
+    const newDraftBlock = idToNewDraftBlock.get(uiBlock.id);
+    if (newDraftBlock) {
+      return { ...newDraftBlock, data: uiBlock.data, orderIndex: idx };
+    }
+    return { ...uiBlock, orderIndex: idx };
+  });
+
+  return { draft: newDraft, blocksToSave, draftOriginal, wasForked: true };
+};
 
   // ─── 2. Add Block ──────────────────────────────────────────────────────────
   const handleAddBlock = async (type: string) => {
@@ -326,11 +348,11 @@ export function PageEditPage() {
     saveAllChanges();
   };
 
-  const handleDiscard = () => {
-    setBlocks(JSON.parse(JSON.stringify(originalBlocks)));
-    updateIsDirty(false);
-    addToast('Unsaved changes discarded', 'info');
-  };
+  // const handleDiscard = () => {
+  //   setBlocks(JSON.parse(JSON.stringify(originalBlocks)));
+  //   updateIsDirty(false);
+  //   addToast('Unsaved changes discarded', 'info');
+  // };
 
   // ─── 7. Publish Action ─────────────────────────────────────────────────────
   const handlePublish = async () => {
@@ -358,7 +380,48 @@ export function PageEditPage() {
     }
   };
 
-  // ─── 8. Blocker Actions ────────────────────────────────────────────────────
+  // ─── 8. Revert to Published Version ───────────────────────────────────────
+  const handleRevertClick = (version: { id: string; createdAt: string }) => {
+    setPendingRevertVersion(version);
+  };
+
+  const handleConfirmRevert = async () => {
+    if (!pendingRevertVersion) return;
+    setIsReverting(true);
+    try {
+      await pageVersionsApi.revert(pendingRevertVersion.id);
+      setPendingRevertVersion(null);
+      setShowHistory(false);
+      await initializePage();
+      addToast('Đã revert về version cũ. Kiểm tra lại và Publish khi sẵn sàng.', 'success');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof ApiClientError ? err.message : 'Revert thất bại. Vui lòng thử lại.';
+      addToast(msg, 'error');
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
+  // ─── Discard Draft → revert về Published hiện tại ───────────────────────────
+  const handleConfirmDiscardDraft = async () => {
+    if (!currentVersion || currentVersion.status !== 'DRAFT') return;
+    setIsDiscardingDraft(true);
+    try {
+      await pageVersionsApi.deleteDraft(currentVersion.id);
+      setShowDiscardDraftConfirm(false);
+      await initializePage();
+      addToast('Đã quay về bản đang publish.', 'success');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof ApiClientError ? err.message : 'Thao tác thất bại. Vui lòng thử lại.';
+      addToast(msg, 'error');
+    } finally {
+      setIsDiscardingDraft(false);
+    }
+  };
+
+  // ─── 9. Blocker Actions ────────────────────────────────────────────────────
   const handleSaveAndLeave = async () => {
     if (blocker.state !== 'blocked') return;
     const result = await saveAllChanges();
@@ -381,7 +444,7 @@ export function PageEditPage() {
   // ─── Render Loading / Error States ────────────────────────────────────────
   if (loading && blocks.length === 0) {
     return (
-      <AppLayout title="Content Manager" breadcrumb={{ label: 'Pages', highlight: 'Loading…' }}>
+      <AppLayout title="Content Manager" >
         <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
           <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -412,22 +475,32 @@ export function PageEditPage() {
   return (
     <AppLayout
       title="Content Manager"
-      breadcrumb={{
-        label: 'Pages',
-        highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
-      }}
+      // breadcrumb={{
+        // label: 'Pages',
+        // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
+      // }}
       actions={
         <div className="flex items-center gap-sm">
           <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-manager')}>
             Back
           </Button>
           <Button
-            variant="secondary"
-            onClick={handleDiscard}
-            disabled={!isDirty || saving || publishing}
+            variant="ghost"
+            icon="history"
+            onClick={() => setShowHistory((v) => !v)}
           >
-            Discard
+            History
           </Button>
+          {isDraftStatus && page?.publishedVersion && (
+            <Button
+              variant="ghost"
+              icon="undo"
+              onClick={() => setShowDiscardDraftConfirm(true)}
+              disabled={isDiscardingDraft || saving || publishing}
+            >
+              Revert to Published
+            </Button>
+          )}
           <Button
             variant="secondary"
             icon="save"
@@ -534,6 +607,142 @@ export function PageEditPage() {
 
       {/* Toasts Feedback */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Discard Draft → Revert to Published Dialog */}
+      {showDiscardDraftConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
+            <h3 className="text-h4 font-semibold text-on-surface">Back to published version ?</h3>
+            <p className="mt-xs text-body-sm text-on-surface-variant">
+              The current draft will be permanently deleted. The page will now display the published content.
+            </p>
+            {isDirty && (
+              <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
+                ⚠️ If you have unsaved changes, those changes will also be lost.
+              </div>
+            )}
+            <div className="mt-lg flex justify-end gap-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowDiscardDraftConfirm(false)}
+                disabled={isDiscardingDraft}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmDiscardDraft}
+                loading={isDiscardingDraft}
+                disabled={isDiscardingDraft}
+              >
+                {isDiscardingDraft ? 'Processing...' : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version History Panel */}
+      {showHistory && (
+        <div className="fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-l border-outline-variant bg-surface shadow-xl">
+          <div className="flex items-center justify-between border-b border-outline-variant px-lg py-md">
+            <h2 className="text-h4 font-semibold text-on-surface">Version History</h2>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="rounded-full p-xs text-on-surface-variant hover:bg-surface-container"
+              aria-label="Close history"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-md space-y-sm">
+            {(!page.versions || page.versions.length === 0) && (
+              <p className="text-body-sm text-on-surface-variant px-xs">
+                No version has been published yet.
+              </p>
+            )}
+            {(page.versions ?? [])
+              .filter((v) => v.status === 'ARCHIVED')
+              .map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface-container px-md py-sm"
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-body-sm font-medium text-on-surface truncate">
+                      {new Date(v.createdAt).toLocaleString('vi-VN')}
+                    </span>
+                    <span className="text-label-sm text-primary font-semibold">ARCHIVED</span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleRevertClick(v)}
+                    disabled={isReverting}
+                  >
+                    Revert
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Backdrop for history panel */}
+      {showHistory && (
+        <div
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={() => setShowHistory(false)}
+        />
+      )}
+
+      {/* Revert Confirm Dialog */}
+      {pendingRevertVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
+            <h3 className="text-h4 font-semibold text-on-surface">Revert to this version ?</h3>
+            <p className="mt-xs text-body-sm text-on-surface-variant">
+              Version:{' '}
+              <span className="font-medium text-on-surface">
+                {new Date(pendingRevertVersion.createdAt).toLocaleString('vi-VN')}
+              </span>
+            </p>
+
+            {/* Warning message tùy trạng thái draft */}
+            <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
+              {isDirty
+                ? '⚠️ You have unsaved changes. Reverting will erase all of those changes.'
+                : isDraftStatus
+                  ? '⚠️ The current DRAFT will be deleted and replaced with a copy of this version.'
+                  : 'A new DRAFT will be created from this version for you to review before publishing.'
+              }
+            </div>
+
+            <div className="mt-lg flex justify-end gap-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPendingRevertVersion(null)}
+                disabled={isReverting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmRevert}
+                loading={isReverting}
+                disabled={isReverting}
+              >
+                {isReverting ? 'Revering...' : 'Confirm Revert'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

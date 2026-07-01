@@ -15,6 +15,7 @@ export const listMediaSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(24),
   mimeType: z.string().optional(),
+  search: z.string().optional(),
 });
 
 export type ListMediaDto = z.infer<typeof listMediaSchema>;
@@ -41,9 +42,12 @@ export class MediaService {
   }
 
   async findAll(params: ListMediaDto) {
-    const { page, pageSize, mimeType } = params;
+    const { page, pageSize, mimeType, search } = params;
     const skip = (page - 1) * pageSize;
-    const where = mimeType ? { mimeType: { startsWith: mimeType } } : {};
+    const where: { mimeType?: { startsWith: string }; key?: { contains: string; mode: 'insensitive' } } = {};
+    if (mimeType) where.mimeType = { startsWith: mimeType };
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch) where.key = { contains: trimmedSearch, mode: 'insensitive' };
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.media.findMany({

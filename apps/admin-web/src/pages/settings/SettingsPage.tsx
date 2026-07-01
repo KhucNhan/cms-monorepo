@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useUsers } from '@/hooks/useUsers';
 import { ApiClientError } from '@/api/client';
@@ -12,12 +13,29 @@ export function SettingsPage() {
   const { toasts, addToast, removeToast } = useToast();
 
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const handleCreate = async (payload: { email: string; password: string; roleId: string }) => {
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((user) =>
+      user.email.toLowerCase().includes(term) ||
+      user.role.name.toLowerCase().includes(term),
+    );
+  }, [search, users]);
+
+  const handleCreate = async (payload: { email?: string; password?: string; roleId?: string }) => {
     try {
-      await createUser(payload);
+      if (!payload.email || !payload.password || !payload.roleId) {
+        throw new Error('Email, password, and role are required.');
+      }
+      await createUser({
+        email: payload.email,
+        password: payload.password,
+        roleId: payload.roleId,
+      });
       setShowCreate(false);
       addToast('User created successfully', 'success');
     } catch (err) {
@@ -57,9 +75,16 @@ export function SettingsPage() {
     <AppLayout
       title="Settings"
       actions={
-        <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
-          New User
-        </Button>
+        <>
+          <SearchInput
+            placeholder="Search users..."
+            value={search}
+            onChange={setSearch}
+          />
+          <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
+            New User
+          </Button>
+        </>
       }
     >
       <div className="p-xl">
@@ -98,7 +123,7 @@ export function SettingsPage() {
             </div>
           )}
 
-          {!loading && !error && users.length === 0 && (
+          {!loading && !error && filteredUsers.length === 0 && (
             <div className="flex flex-col items-center justify-center p-xl border-2 border-dashed border-outline-variant rounded-xl text-center">
               <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">group</span>
               <h3 className="text-h3 font-h3 text-on-background">No users found</h3>
@@ -111,7 +136,7 @@ export function SettingsPage() {
             </div>
           )}
 
-          {!loading && users.length > 0 && (
+          {!loading && filteredUsers.length > 0 && (
             <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
@@ -128,7 +153,7 @@ export function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {users.map((user) => (
+                    {filteredUsers.map((user) => (
                       <tr key={user.id} className="hover:bg-primary/5 transition-colors group">
                         <td className="p-md">
                           <div className="flex items-center gap-sm">

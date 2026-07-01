@@ -17,6 +17,7 @@ export interface MediaListParams {
   page?: number;
   pageSize?: number;
   mimeType?: string;
+  search?: string;
 }
 
 export const mediaApi = {
@@ -25,6 +26,7 @@ export const mediaApi = {
     if (params.page) qs.set('page', String(params.page));
     if (params.pageSize) qs.set('pageSize', String(params.pageSize));
     if (params.mimeType) qs.set('mimeType', params.mimeType);
+    if (params.search) qs.set('search', params.search);
     const query = qs.toString() ? `?${qs}` : '';
     return fetch(`${BASE_URL}/media${query}`, {
       headers: {

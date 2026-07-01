@@ -28,7 +28,7 @@ export class MediaController {
   @Get()
   @RequirePermissions('media:read')
   @ApiOperation({ summary: 'List media files (paginated)' })
-  findAll(@Query(new ZodValidationPipe(listMediaSchema)) query: { page: number; pageSize: number; mimeType?: string }) {
+  findAll(@Query(new ZodValidationPipe(listMediaSchema)) query: { page: number; pageSize: number; mimeType?: string; search?: string }) {
     return this.mediaService.findAll(query);
   }
 
