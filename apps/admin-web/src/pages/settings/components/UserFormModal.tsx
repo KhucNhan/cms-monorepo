@@ -80,12 +80,17 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-md">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-md" autoComplete="off">
+          {/* Hidden dummy fields to trick browser autofill heuristics */}
+          <input type="text" name="fake-username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="fake-password" autoComplete="new-password" className="hidden" tabIndex={-1} aria-hidden="true" />
+
           <div className="flex flex-col gap-xs">
             <label className="text-label-md font-bold text-on-surface">Email</label>
             <input
               type="email"
               required
+              autoComplete="off"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
@@ -102,6 +107,7 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
               onChange={(e) => setPassword(e.target.value)}
               required={isCreate}
               minLength={isCreate ? 8 : undefined}
+              autoComplete="new-password"
               className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
               placeholder={isCreate ? 'Min. 8 characters' : '••••••••'}
             />

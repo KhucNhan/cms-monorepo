@@ -1,10 +1,12 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -13,7 +15,12 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, RequirePermissions } from '../auth/guards/roles.guard';
-import { PageVersionsService } from './page-versions.service';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import {
+  PageVersionsService,
+  updateSeoMetaSchema,
+  type UpdateSeoMetaDto,
+} from './page-versions.service';
 import type { FastifyRequest } from 'fastify';
 import type { JwtPayload } from '@cms/shared-types';
 
@@ -45,6 +52,16 @@ export class PageVersionsController {
   ) {
     return this.pageVersionsService.fork(id, req.user.sub);
   }
+  @Patch(':id')
+  @RequirePermissions('page:update')
+  @ApiOperation({ summary: 'Update SEO metadata (title/description) of a DRAFT or ARCHIVED version' })
+  updateSeoMeta(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateSeoMetaSchema)) dto: UpdateSeoMetaDto,
+  ) {
+    return this.pageVersionsService.updateSeoMeta(id, dto);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('page:delete')

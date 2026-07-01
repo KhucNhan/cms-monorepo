@@ -142,10 +142,10 @@ export function SettingsPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
-                      {['Email', 'Role', 'Actions'].map((h, i) => (
+                      {['Email', 'Role', 'Actions'].map((h, i, arr) => (
                         <th
                           key={h}
-                          className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === 2 ? 'text-right' : 'text-left'}`}
+                          className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
                         >
                           {h}
                         </th>
@@ -153,42 +153,55 @@ export function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="hover:bg-primary/5 transition-colors group">
-                        <td className="p-md">
-                          <div className="flex items-center gap-sm">
-                            <span className="material-symbols-outlined text-on-surface-variant text-[18px]">person</span>
-                            <div>
-                              <p className="text-[14px] font-semibold text-on-background">{user.email}</p>
-                              <p className="text-[11px] text-on-surface-variant font-mono">{user.id.slice(0, 8)}…</p>
+                    {filteredUsers.map((user) => {
+                      const createdAt = (user as unknown as { createdAt?: string }).createdAt;
+                      const updatedAt = (user as unknown as { updatedAt?: string }).updatedAt;
+                      const formatDate = (value?: string) =>
+                        value
+                          ? new Date(value).toLocaleDateString('en-GB', {
+                              day: '2-digit', month: 'short', year: 'numeric',
+                            })
+                          : '—';
+
+                      return (
+                        <tr
+                          key={user.id}
+                          onClick={() => setEditUser(user)}
+                          className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                        >
+                          <td className="p-md">
+                            <div className="flex items-center gap-sm">
+                              <span className="material-symbols-outlined text-on-surface-variant text-[18px]">person</span>
+                              <div>
+                                <p className="text-[14px] font-semibold text-on-background">{user.email}</p>
+                                <p className="text-[11px] text-on-surface-variant font-mono">{user.id.slice(0, 8)}…</p>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-md">
-                          <span className="inline-flex items-center gap-xs px-sm py-1 rounded-full text-label-md font-label-md bg-primary/10 text-primary capitalize">
-                            {user.role.name}
-                          </span>
-                        </td>
-                        <td className="p-md text-right">
-                          <div className="flex items-center justify-end gap-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => setEditUser(user)}
-                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                              title="Edit user"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">edit</span>
-                            </button>
-                            <button
-                              onClick={() => setDeleteId(user.id)}
-                              className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                              title="Delete user"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="p-md">
+                            <span className="inline-flex items-center gap-xs px-sm py-1 rounded-full text-label-md font-label-md bg-primary/10 text-primary capitalize">
+                              {user.role.name}
+                            </span>
+                          </td>
+                          {/* <td className="p-md text-body-md text-on-surface-variant">{formatDate(createdAt)}</td>
+                          <td className="p-md text-body-md text-on-surface-variant">{formatDate(updatedAt)}</td> */}
+                          <td className="p-md text-right">
+                            <div className="flex items-center justify-end gap-xs">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteId(user.id);
+                                }}
+                                className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
+                                title="Delete user"
+                              >
+                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

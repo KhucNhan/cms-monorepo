@@ -34,6 +34,19 @@ export function PageEditPage() {
   const [pendingRevertVersion, setPendingRevertVersion] = useState<{ id: string; createdAt: string } | null>(null);
   const [showDiscardDraftConfirm, setShowDiscardDraftConfirm] = useState(false);
   const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
+  const [pendingDeleteVersion, setPendingDeleteVersion] = useState<{ id: string; createdAt: string; status: string } | null>(null);
+  const [isDeletingVersion, setIsDeletingVersion] = useState(false);
+  const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
+  const [dragOverBlockIndex, setDragOverBlockIndex] = useState<number | null>(null);
+
+  // ─── Page Info (slug + SEO title/description) ──────────────────────────────
+  const [slugInput, setSlugInput] = useState('');
+  const [metaTitle, setMetaTitle] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+  // Baseline snapshot to detect changes when saving alongside blocks
+  const [originalSlug, setOriginalSlug] = useState('');
+  const [originalMetaTitle, setOriginalMetaTitle] = useState('');
+  const [originalMetaDescription, setOriginalMetaDescription] = useState('');
 
   // Synchronous ref tracking for React Router blocker evaluation
   const isDirtyRef = useRef(false);
@@ -92,6 +105,15 @@ export function PageEditPage() {
       setBlocks(sortedBlocks);
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedBlocks)));
       updateIsDirty(false);
+
+      // Sync editable page-info fields with the freshly loaded data
+      const seoMeta = (activeVersion.seoMeta ?? {}) as { title?: string; description?: string };
+      setSlugInput(pageData.slug);
+      setMetaTitle(seoMeta.title ?? '');
+      setMetaDescription(seoMeta.description ?? '');
+      setOriginalSlug(pageData.slug);
+      setOriginalMetaTitle(seoMeta.title ?? '');
+      setOriginalMetaDescription(seoMeta.description ?? '');
     } catch (err) {
       console.error(err);
       const msg = err instanceof ApiClientError ? err.message : 'Initialization failed.';
@@ -244,13 +266,14 @@ export function PageEditPage() {
     }
   };
 
-  // ─── 4. Reorder Blocks ─────────────────────────────────────────────────────
-  const moveBlock = (index: number, direction: 'up' | 'down') => {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= blocks.length) return;
+  // ─── 4. Reorder Blocks (drag & drop) ───────────────────────────────────────
+  const reorderBlocks = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= blocks.length || toIndex >= blocks.length) return;
 
     const list = [...blocks];
-    [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+    const [moved] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, moved);
     const reassigned = list.map((b, idx) => ({ ...b, orderIndex: idx }));
     setBlocks(reassigned);
     updateIsDirty(true);
@@ -266,6 +289,7 @@ export function PageEditPage() {
 
   // ─── 6. Save Core Logic ────────────────────────────────────────────────────
   const saveAllChanges = async (): Promise<{ ok: boolean; versionId?: string }> => {
+    if (!page) return { ok: false };
     setSaving(true);
     let wasForked = false;
     let newDraft: PageVersion | null = null;
@@ -301,6 +325,20 @@ export function PageEditPage() {
 
       await Promise.all(promises);
 
+      // C. Save slug / SEO title / description if changed
+      const trimmedSlug = slugInput.trim();
+      if (trimmedSlug && trimmedSlug !== page.slug) {
+        await pagesApi.update(page.id, { slug: trimmedSlug });
+      }
+      const metaChanged =
+        metaTitle.trim() !== originalMetaTitle || metaDescription.trim() !== originalMetaDescription;
+      if (metaChanged) {
+        await pageVersionsApi.updateSeoMeta(draft.id, {
+          title: metaTitle.trim(),
+          description: metaDescription.trim(),
+        });
+      }
+
       // ─── All API calls succeeded: now commit state atomically ───────────────
       // Reload blocks from DB to get the definitive state
       const freshBlocks = await blocksApi.getByVersion(draft.id);
@@ -309,6 +347,9 @@ export function PageEditPage() {
       setCurrentVersion(draft);                               // switch to draft version
       setBlocks(sortedFresh);                                // sync blocks
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedFresh))); // reset baseline
+      setOriginalSlug(trimmedSlug || page.slug);
+      setOriginalMetaTitle(metaTitle.trim());
+      setOriginalMetaDescription(metaDescription.trim());
       updateIsDirty(false);
       addToast('Draft saved successfully!', 'success');
       return { ok: true, versionId: draft.id };
@@ -403,6 +444,28 @@ export function PageEditPage() {
     }
   };
 
+  // ─── 8b. Delete a DRAFT or ARCHIVED version ────────────────────────────────
+  const handleDeleteVersionClick = (version: { id: string; createdAt: string; status: string }) => {
+    setPendingDeleteVersion(version);
+  };
+
+  const handleConfirmDeleteVersion = async () => {
+    if (!pendingDeleteVersion) return;
+    setIsDeletingVersion(true);
+    try {
+      await pageVersionsApi.deleteVersion(pendingDeleteVersion.id);
+      setPendingDeleteVersion(null);
+      await initializePage();
+      addToast('Version deleted successfully.', 'info');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof ApiClientError ? err.message : 'Failed to delete version. Please try again.';
+      addToast(msg, 'error');
+    } finally {
+      setIsDeletingVersion(false);
+    }
+  };
+
   // ─── Discard Draft → revert về Published hiện tại ───────────────────────────
   const handleConfirmDiscardDraft = async () => {
     if (!currentVersion || currentVersion.status !== 'DRAFT') return;
@@ -471,6 +534,32 @@ export function PageEditPage() {
   }
 
   const isDraftStatus = currentVersion?.status === 'DRAFT';
+
+  // ─── Combine DRAFT / PUBLISHED / ARCHIVED into one list for the History panel ──
+  // DRAFT and PUBLISHED always float to the top (so the user can see & track
+  // where they currently are), ARCHIVED versions follow, newest first.
+  const historyVersionsMap = new Map<string, { id: string; status: string; createdAt: string }>();
+  (page.versions ?? []).forEach((v) => historyVersionsMap.set(v.id, v));
+  if (page.publishedVersion) {
+    historyVersionsMap.set(page.publishedVersion.id, {
+      id: page.publishedVersion.id,
+      status: 'PUBLISHED',
+      createdAt: page.publishedVersion.createdAt,
+    });
+  }
+  if (currentVersion?.status === 'DRAFT') {
+    historyVersionsMap.set(currentVersion.id, {
+      id: currentVersion.id,
+      status: 'DRAFT',
+      createdAt: currentVersion.createdAt,
+    });
+  }
+  const STATUS_ORDER: Record<string, number> = { DRAFT: 0, PUBLISHED: 1, ARCHIVED: 2 };
+  const historyVersions = Array.from(historyVersionsMap.values()).sort((a, b) => {
+    const orderDiff = (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   return (
     <AppLayout
@@ -556,6 +645,68 @@ export function PageEditPage() {
             </Button>
           </div>
 
+          {/* Page Info: slug + SEO title/description */}
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
+            <h3 className="text-h4 font-semibold text-on-surface">Page Info</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+              <div className="flex flex-col gap-xs md:col-span-2">
+                <label className="text-label-md font-bold text-on-surface">Slug</label>
+                <div className="flex items-center gap-xs">
+                  <span className="text-on-surface-variant text-body-md">/</span>
+                  <input
+                    type="text"
+                    value={slugInput}
+                    onChange={(e) => {
+                      setSlugInput(e.target.value);
+                      updateIsDirty(true);
+                    }}
+                    className="flex-1 bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none font-mono"
+                    placeholder="page-slug"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-xs">
+                <label className="text-label-md font-bold text-on-surface">SEO Title</label>
+                <input
+                  type="text"
+                  maxLength={60}
+                  value={metaTitle}
+                  onChange={(e) => {
+                    setMetaTitle(e.target.value);
+                    updateIsDirty(true);
+                  }}
+                  className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
+                  placeholder="e.g. Home | CMS Site"
+                />
+                <span className="text-[11px] text-on-surface-variant">{metaTitle.length}/60</span>
+              </div>
+
+              <div className="flex flex-col gap-xs">
+                <label className="text-label-md font-bold text-on-surface">SEO Description</label>
+                <textarea
+                  rows={2}
+                  maxLength={160}
+                  value={metaDescription}
+                  onChange={(e) => {
+                    setMetaDescription(e.target.value);
+                    updateIsDirty(true);
+                  }}
+                  className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none resize-none"
+                  placeholder="e.g. Welcome to our site"
+                />
+                <span className="text-[11px] text-on-surface-variant">{metaDescription.length}/160</span>
+              </div>
+            </div>
+
+            {isDraftStatus === false && (
+              <p className="text-[11px] text-on-surface-variant">
+                Editing this while viewing PUBLISHED will create/update a DRAFT — publish it when ready.
+              </p>
+            )}
+          </div>
+
           {/* Blocks List */}
           {blocks.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-xl text-center border-2 border-dashed border-outline-variant rounded-xl bg-surface">
@@ -578,7 +729,21 @@ export function PageEditPage() {
                   block={block}
                   index={idx}
                   totalBlocks={blocks.length}
-                  onMove={(dir) => moveBlock(idx, dir)}
+                  isDragging={draggedBlockIndex === idx}
+                  isDragOver={dragOverBlockIndex === idx && draggedBlockIndex !== null && draggedBlockIndex !== idx}
+                  onDragStart={() => setDraggedBlockIndex(idx)}
+                  onDragEnter={() => {
+                    if (draggedBlockIndex !== null && draggedBlockIndex !== idx) {
+                      setDragOverBlockIndex(idx);
+                    }
+                  }}
+                  onDragEnd={() => {
+                    if (draggedBlockIndex !== null && dragOverBlockIndex !== null) {
+                      reorderBlocks(draggedBlockIndex, dragOverBlockIndex);
+                    }
+                    setDraggedBlockIndex(null);
+                    setDragOverBlockIndex(null);
+                  }}
                   onDelete={() => handleDeleteBlock(block.id)}
                   onUpdateData={(newData) => updateBlockData(block.id, newData)}
                 />
@@ -659,34 +824,66 @@ export function PageEditPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-md space-y-sm">
-            {(!page.versions || page.versions.length === 0) && (
+            {historyVersions.length === 0 && (
               <p className="text-body-sm text-on-surface-variant px-xs">
                 No version has been published yet.
               </p>
             )}
-            {(page.versions ?? [])
-              .filter((v) => v.status === 'ARCHIVED')
-              .map((v) => (
+            {historyVersions.map((v) => {
+              const isCurrent = currentVersion?.id === v.id;
+              const canSetAsDraft = v.status === 'ARCHIVED';
+              const canDelete = v.status === 'DRAFT' || v.status === 'ARCHIVED';
+              return (
                 <div
                   key={v.id}
-                  className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface-container px-md py-sm"
+                  className={`flex items-center justify-between rounded-lg border px-md py-sm ${
+                    isCurrent
+                      ? 'border-primary bg-primary/5'
+                      : 'border-outline-variant bg-surface-container'
+                  }`}
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-body-sm font-medium text-on-surface truncate">
                       {new Date(v.createdAt).toLocaleString('vi-VN')}
                     </span>
-                    <span className="text-label-sm text-primary font-semibold">ARCHIVED</span>
+                    <span
+                      className={`text-label-sm font-semibold ${
+                        v.status === 'DRAFT'
+                          ? 'text-on-surface-variant'
+                          : v.status === 'PUBLISHED'
+                            ? 'text-primary'
+                            : 'text-secondary'
+                      }`}
+                    >
+                      {v.status}
+                      {isCurrent && ' · You are here'}
+                    </span>
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleRevertClick(v)}
-                    disabled={isReverting}
-                  >
-                    Revert
-                  </Button>
+                  <div className="flex items-center gap-xs flex-shrink-0">
+                    {canSetAsDraft && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleRevertClick(v)}
+                        disabled={isReverting || isDeletingVersion}
+                      >
+                        Set as Draft
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="delete"
+                        onClick={() => handleDeleteVersionClick(v)}
+                        disabled={isReverting || isDeletingVersion}
+                        aria-label="Delete version"
+                      />
+                    )}
+                  </div>
                 </div>
-              ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -703,7 +900,7 @@ export function PageEditPage() {
       {pendingRevertVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
-            <h3 className="text-h4 font-semibold text-on-surface">Revert to this version ?</h3>
+            <h3 className="text-h4 font-semibold text-on-surface">Set this version as Draft?</h3>
             <p className="mt-xs text-body-sm text-on-surface-variant">
               Version:{' '}
               <span className="font-medium text-on-surface">
@@ -714,9 +911,9 @@ export function PageEditPage() {
             {/* Warning message tùy trạng thái draft */}
             <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
               {isDirty
-                ? '⚠️ You have unsaved changes. Reverting will erase all of those changes.'
+                ? '⚠️ You have unsaved changes. Setting this as Draft will erase all of those changes.'
                 : isDraftStatus
-                  ? '⚠️ The current DRAFT will be deleted and replaced with a copy of this version.'
+                  ? '⚠️ The current DRAFT will be overwritten with a copy of this version.'
                   : 'A new DRAFT will be created from this version for you to review before publishing.'
               }
             </div>
@@ -737,7 +934,49 @@ export function PageEditPage() {
                 loading={isReverting}
                 disabled={isReverting}
               >
-                {isReverting ? 'Revering...' : 'Confirm Revert'}
+                {isReverting ? 'Processing...' : 'Set as Draft'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Version Confirm Dialog */}
+      {pendingDeleteVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
+            <h3 className="text-h4 font-semibold text-on-surface">Delete this version?</h3>
+            <p className="mt-xs text-body-sm text-on-surface-variant">
+              Version:{' '}
+              <span className="font-medium text-on-surface">
+                {new Date(pendingDeleteVersion.createdAt).toLocaleString('vi-VN')}
+              </span>{' '}
+              <span className="font-medium text-on-surface">({pendingDeleteVersion.status})</span>
+            </p>
+
+            <div className="mt-md rounded-lg border border-error/40 bg-error/10 px-md py-sm text-body-sm text-on-surface">
+              ⚠️ This action is permanent and cannot be undone.
+              {pendingDeleteVersion.id === currentVersion?.id &&
+                ' You are currently editing this version — deleting it will reload the editor.'}
+            </div>
+
+            <div className="mt-lg flex justify-end gap-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPendingDeleteVersion(null)}
+                disabled={isDeletingVersion}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmDeleteVersion}
+                loading={isDeletingVersion}
+                disabled={isDeletingVersion}
+              >
+                {isDeletingVersion ? 'Deleting...' : 'Confirm Delete'}
               </Button>
             </div>
           </div>

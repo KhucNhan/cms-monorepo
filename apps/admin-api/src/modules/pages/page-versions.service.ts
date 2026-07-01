@@ -4,9 +4,17 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { ErrorCode } from '@cms/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PagesService } from './pages.service';
+
+export const updateSeoMetaSchema = z.object({
+  title: z.string().max(60).optional(),
+  description: z.string().max(160).optional(),
+});
+
+export type UpdateSeoMetaDto = z.infer<typeof updateSeoMetaSchema>;
 
 @Injectable()
 export class PageVersionsService {
@@ -136,6 +144,32 @@ export class PageVersionsService {
 
     // Clone PUBLISHED → DRAFT mới (reuse logic của fork)
     return this.pagesService.createDraftVersion(targetVersion.pageId, versionId, userId);
+  }
+
+  /**
+   * Update SEO metadata (title/description) of a DRAFT or ARCHIVED version.
+   * Merges into the existing seoMeta JSON so other keys (ogImage, noIndex) are preserved.
+   * PUBLISHED versions are protected — the frontend must ensureDraftVersion() first.
+   */
+  async updateSeoMeta(versionId: string, dto: UpdateSeoMetaDto) {
+    const version = await this.prisma.pageVersion.findUnique({ where: { id: versionId } });
+    if (!version) {
+      throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: 'Version not found' });
+    }
+    if (version.status === 'PUBLISHED') {
+      throw new BadRequestException('Cannot edit metadata of a published version directly. Save to a draft first.');
+    }
+
+    const mergedSeoMeta = {
+      ...(version.seoMeta as object),
+      ...(dto.title !== undefined ? { title: dto.title } : {}),
+      ...(dto.description !== undefined ? { description: dto.description } : {}),
+    };
+
+    return this.prisma.pageVersion.update({
+      where: { id: versionId },
+      data: { seoMeta: mergedSeoMeta },
+    });
   }
 
   /** Delete a DRAFT or ARCHIVED version. PUBLISHED versions are protected. */
