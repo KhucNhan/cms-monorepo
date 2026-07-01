@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, RequirePermissions } from '../auth/guards/roles.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { MediaService, listMediaSchema } from './media.service';
+import { Body, Patch } from '@nestjs/common';
+import { renameMediaSchema } from './media.service';
 
 @ApiTags('media')
 @ApiBearerAuth()
@@ -30,6 +32,12 @@ export class MediaController {
   @ApiOperation({ summary: 'List media files (paginated)' })
   findAll(@Query(new ZodValidationPipe(listMediaSchema)) query: { page: number; pageSize: number; mimeType?: string; search?: string }) {
     return this.mediaService.findAll(query);
+  }
+
+  @Patch(':id/rename')
+  async rename(@Param('id') id: string, @Body() body: unknown) {
+    const dto = renameMediaSchema.parse(body);
+    return this.mediaService.rename(id, dto.name);
   }
 
   @Get(':id')

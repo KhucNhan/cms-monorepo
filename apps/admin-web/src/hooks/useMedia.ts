@@ -64,6 +64,21 @@ export function useMedia(filters: MediaFilters = {}) {
     return created;
   }, []);
 
+  const renameMedia = useCallback(async (id: string, name: string) => {
+    const updated = await mediaApi.rename(id, name);
+    setState((s) => {
+      if (!s.data) return s;
+      return {
+        ...s,
+        data: {
+          ...s.data,
+          data: s.data.data.map((m) => (m.id === id ? updated : m)),
+        },
+      };
+    });
+    return updated;
+  }, []);
+
   return {
     media: state.data?.data ?? [],
     total: state.data?.meta?.total ?? 0,
@@ -75,5 +90,6 @@ export function useMedia(filters: MediaFilters = {}) {
     refetch: fetch,
     deleteMedia,
     uploadMedia,
+    renameMedia,
   };
 }
