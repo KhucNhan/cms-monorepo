@@ -18,39 +18,35 @@ CMS nội bộ, kiến trúc Page + Block Builder, 3 app độc lập chia sẻ 
 Nếu một task đụng tới "thêm/sửa field của block" → luôn bắt đầu và kết thúc ở package này,
 không sửa dữ liệu ở 3 app riêng lẻ.
 
-### 0.1 Đang sửa app/package nào? Đọc thêm file cục bộ tương ứng
- 
-Root AGENTS.md chỉ chứa invariant **toàn hệ thống**. Quy ước riêng từng workspace nằm ở file
-AGENTS.md ngay trong thư mục đó — đọc thêm file tương ứng, KHÔNG cần đọc hết các file còn lại:
- 
-| Đang sửa gì | Đọc thêm |
+### 0.1 Đang sửa gì? Đọc thêm file cục bộ tương ứng — KHÔNG cần đọc hết repo
+
+| Đang sửa | Đọc thêm |
 |---|---|
-| NestJS, API, Prisma, auth | `apps/admin-api/AGENTS.md` |
+| NestJS / API / Prisma / auth | `apps/admin-api/AGENTS.md` |
 | React/Vite admin UI | `apps/admin-web/AGENTS.md` |
 | Next.js public site | `apps/web/AGENTS.md` |
-| Thêm/sửa block type | `packages/block-registry/AGENTS.md` (đủ, thường không cần đọc mục 3 ở root nữa) |
+| Thêm/sửa block type | `packages/block-registry/AGENTS.md` |
+| Muốn hiểu "tại sao" kiến trúc thế này | `ARCHITECTURE-DESIGN.md` |
+
+Root AGENTS.md chỉ chứa invariant chung, lệnh, known gaps, quy ước code, checklist — không lặp
+lại ở các file cục bộ.
 
 ## 1. Invariant — KHÔNG được vi phạm
 
 Vi phạm các điều dưới đây gây drift giữa 3 app, là loại bug khó debug nhất trong hệ thống này.
+Giải thích chi tiết "vì sao" từng invariant: xem `ARCHITECTURE-DESIGN.md`.
 
-- **`packages/block-registry/src/blocks/*/schema.ts` không được import React, không import bất kỳ gì từ NestJS.**
-  Đây là điều kiện để `admin-api` (Node thuần) import được package mà không kéo React vào backend.
-  Nếu cần thêm logic UI-only (helperText, multiline...) → đặt trong field config của `form-engine`
-  (mục 7 tài liệu kiến trúc), **không** đặt trong `schema.ts`.
-- **Không viết `switch (block.type)` hay `if (type === 'hero')` ở bất kỳ đâu ngoài
-  `packages/block-registry/src/registry.ts`.** Muốn biết block nào tồn tại / lấy Editor / lấy Renderer
-  → luôn gọi `getBlockDefinition(type)`, không hardcode danh sách.
-- **NestJS không bao giờ render HTML.** `admin-api` chỉ trả JSON (`data: Block[]`). Nếu một task
-  yêu cầu "làm cho block hiện đẹp hơn" mà đường dẫn liên quan tới `apps/admin-api` → đó là dấu hiệu
-  hiểu sai task, dừng lại và hỏi lại.
-- **`blocks.data` (JSONB) luôn được validate bằng Zod schema từ `block-registry` trước khi ghi DB**,
-  ở `BlocksService.validateBlockData()`. Không thêm `@IsString()`/class-validator decorator song song —
-  sẽ tạo ra hai nguồn validate lệch nhau.
-- **Publish = đổi `pages.publishedVersionId`, không bao giờ UPDATE trực tiếp lên bản đang published.**
-  Mọi thay đổi nội dung luôn đi qua version DRAFT mới nhất trước.
-- **`apps/web` không bao giờ query Postgres trực tiếp.** Mọi dữ liệu lấy qua Admin API
-  (`lib/cms-client.ts`). Nếu thấy import Prisma trong `apps/web` — đó là lỗi kiến trúc, báo lại thay vì sửa tiếp.
+- Không import React, không import gì từ NestJS trong `packages/block-registry/src/blocks/*/schema.ts`
+  (chi tiết & ví dụ: `packages/block-registry/AGENTS.md`).
+- Không viết `switch (block.type)` hay `if (type === 'hero')` ở bất kỳ đâu ngoài
+  `packages/block-registry/src/registry.ts` — luôn gọi `getBlockDefinition(type)`
+  (chi tiết & ví dụ: `packages/block-registry/AGENTS.md`).
+- NestJS không bao giờ render HTML, `admin-api` chỉ trả JSON (chi tiết: `apps/admin-api/AGENTS.md`).
+- `blocks.data` (JSONB) luôn validate bằng Zod schema từ `block-registry` ở
+  `BlocksService.validateBlockData()` trước khi ghi DB — không thêm class-validator decorator song song.
+- Publish = đổi `pages.publishedVersionId`, không bao giờ UPDATE trực tiếp lên bản đang published.
+- `apps/web` không bao giờ query Postgres trực tiếp — mọi dữ liệu lấy qua Admin API
+  (`lib/cms-client.ts`); nếu thấy import Prisma trong `apps/web`, đó là lỗi kiến trúc, báo lại.
 
 ## 2. Lệnh thao tác theo workspace
 
@@ -78,21 +74,11 @@ Sau khi sửa `packages/block-registry` hoặc `packages/shared-types`, **không
 `alias['@cms/block-registry']` và `next.config.ts` `transpilePackages`). Chỉ `admin-api` build ra `dist/`
 mới cần `pnpm --filter admin-api build` nếu test bằng bản build thật thay vì `nest start --watch`.
 
-## 3. Quy trình chuẩn: thêm một block type mới
+## 3. Thêm một block type mới
 
-Đây là thao tác phổ biến nhất trong repo, làm đúng thứ tự tránh phải sửa lại:
-
-1. Tạo `packages/block-registry/src/blocks/<ten-block>/schema.ts` — Zod schema thuần, export
-   `type XxxData = z.infer<typeof xxxSchema>`.
-2. Tạo `editor.tsx` (component cho admin-web) và `renderer.tsx` (component cho Next.js) trong cùng thư mục.
-3. Tạo `index.ts` export `BlockDefinition` (xem `hero/index.ts` làm mẫu: `type`, `label`, `icon`,
-   `schema`, `defaultData`, `Editor`, `Renderer`).
-4. Đăng ký một dòng trong `packages/block-registry/src/registry.ts` (`definitions = [..., xxxBlock]`).
-5. **Không sửa** `apps/admin-api/src/modules/blocks/*`, `apps/web/lib/render-blocks.tsx`, hay
-   `BlockPickerModal.tsx` — cả ba đều đọc registry động, tự nhận block mới.
-6. Nếu block cần field kiểu mới mà `form-engine`'s `FieldConfig` chưa hỗ trợ (ví dụ `color-picker`) →
-   sửa `packages/form-engine` thêm case mới cho `DynamicField`, **đây là nơi duy nhất** được thêm
-   `switch`-case theo field type (khác với block type ở invariant #2).
+Đây là thao tác phổ biến nhất trong repo. Checklist đầy đủ (5-6 bước, thứ tự cụ thể, kèm lưu ý
+"không sửa file nào") đã nằm ở `packages/block-registry/AGENTS.md` — đọc ở đó, không lặp lại
+nguyên văn ở root để tránh hai bản lệch nhau theo thời gian.
 
 ## 4. Known gaps — đã biết, đừng "sửa" mù quáng theo đúng tài liệu kiến trúc gốc
 
@@ -116,9 +102,9 @@ giả định thứ gì tồn tại, kiểm tra thực tế:
 - **`admin-web` chưa có `packages/ui`** — token màu Material You (`primary`, `on-surface`,
   `surface-container`...) định nghĩa trực tiếp trong `apps/admin-web/tailwind.config.js`. `apps/web`
   hiện có `tailwind.config.js` gần như rỗng (`theme.extend: {}`) — nghĩa là canvas preview trong
-  Page Editor (mục 5, "tái sử dụng Renderer để preview giống thật") **hiện chưa cùng theme** với
-  `web`. Nếu task liên quan tới preview không khớp giao diện thật, đây là nguyên nhân gốc, không
-  phải bug ở component.
+  Page Editor (xem `packages/block-registry/AGENTS.md`, "tái sử dụng Renderer để preview giống thật")
+  **hiện chưa cùng theme** với `web`. Nếu task liên quan tới preview không khớp giao diện thật, đây là
+  nguyên nhân gốc, không phải bug ở component.
 - **`Role.permissions` là `Json` (mảng string) trong Prisma, không có model `Permission` riêng** —
   README mục "Database schema" vẽ sơ đồ có `RolePermissions` như bảng nối là mô tả logic, không phải
   bảng thật. Query permission luôn qua `role.permissions` (mảng), không `role.rolePermissions.permission`.

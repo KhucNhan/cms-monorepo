@@ -1,7 +1,8 @@
 # AGENTS.md — apps/admin-api
 
 > Đọc `/AGENTS.md` (root) trước nếu chưa đọc — file này chỉ bổ sung quy ước riêng của NestJS app,
-> không lặp lại invariant chung (đã có ở root mục 1).
+> không lặp lại invariant chung (đã có ở root mục 1). Giải thích "vì sao" các invariant liên quan
+> tới app này: xem `/ARCHITECTURE-DESIGN.md`.
 
 ## Quy ước riêng app này
 
