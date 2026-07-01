@@ -4,10 +4,9 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'fs';
-import { join, extname } from 'path';
+import { createWriteStream, existsSync, mkdirSync, unlinkSync, renameSync } from 'fs';
+import { join, extname, basename } from 'path';
 import { pipeline } from 'stream/promises';
-import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
 
@@ -19,6 +18,12 @@ export const listMediaSchema = z.object({
 });
 
 export type ListMediaDto = z.infer<typeof listMediaSchema>;
+
+export const renameMediaSchema = z.object({
+  name: z.string().trim().min(1, 'Tên file không được để trống.').max(255),
+});
+
+export type RenameMediaDto = z.infer<typeof renameMediaSchema>;
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -89,7 +94,9 @@ export class MediaService {
     }
 
     const ext = extname(file.filename) || this.extFromMime(file.mimetype);
-    const key = `${randomUUID()}${ext}`;
+    // Dùng tên file gốc (đã sanitize) làm key thay vì randomUUID, để Media Library
+    // hiển thị đúng tên người dùng upload. Trùng tên -> tự thêm hậu tố -1, -2...
+    const key = await this.generateUniqueKey(file.filename, ext);
     const filePath = join(this.uploadDir, key);
 
     await pipeline(file.file, createWriteStream(filePath));
@@ -114,6 +121,40 @@ export class MediaService {
     });
   }
 
+  /**
+   * Đổi tên hiển thị của media (đồng thời đổi tên file vật lý trên disk và `key`/`url` trong DB).
+   * Giữ nguyên phần extension gốc, chỉ đổi phần base name; input đã qua renameMediaSchema.
+   */
+  async rename(id: string, newNameRaw: string) {
+    const media = await this.findOne(id);
+    const ext = extname(media.key);
+
+    const rawBase = this.stripExtension(newNameRaw, ext);
+    const sanitizedBase = this.sanitizeFilename(rawBase);
+    if (!sanitizedBase) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Tên file không hợp lệ sau khi chuẩn hoá.',
+      });
+    }
+
+    const newKey = await this.generateUniqueKey(`${sanitizedBase}${ext}`, ext, id);
+    if (newKey === media.key) {
+      return media;
+    }
+
+    const oldPath = join(this.uploadDir, media.key);
+    const newPath = join(this.uploadDir, newKey);
+    if (existsSync(oldPath)) {
+      renameSync(oldPath, newPath);
+    }
+
+    return this.prisma.media.update({
+      where: { id },
+      data: { key: newKey, url: `/uploads/${newKey}` },
+    });
+  }
+
   async delete(id: string) {
     const media = await this.findOne(id);
     const filePath = join(this.uploadDir, media.key);
@@ -135,5 +176,49 @@ export class MediaService {
       'image/svg+xml': '.svg',
     };
     return map[mime] ?? '';
+  }
+
+  /** Loại bỏ extension khỏi tên file (nếu có), giữ lại phần base name thô. */
+  private stripExtension(name: string, ext: string): string {
+    const base = basename(name);
+    if (ext && base.toLowerCase().endsWith(ext.toLowerCase())) {
+      return base.slice(0, base.length - ext.length);
+    }
+    return base.replace(/\.[^.]+$/, '');
+  }
+
+  /** Chuẩn hoá tên file: bỏ dấu tiếng Việt, ký tự đặc biệt, khoảng trắng -> dấu gạch ngang. */
+  private sanitizeFilename(name: string): string {
+    return name
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase()
+      .slice(0, 100);
+  }
+
+  /**
+   * Sinh key duy nhất từ tên file gốc. Nếu trùng với record khác trong DB,
+   * tự thêm hậu tố -1, -2... `excludeId` dùng khi rename để không tự đụng chính nó.
+   */
+  private async generateUniqueKey(originalFilename: string, ext: string, excludeId?: string): Promise<string> {
+    const rawBase = this.stripExtension(originalFilename, ext);
+    const base = this.sanitizeFilename(rawBase) || 'file';
+
+    let candidate = `${base}${ext}`;
+    let suffix = 1;
+    // eslint-disable-next-line no-constant-condition
+    while (
+      await this.prisma.media.findFirst({
+        where: excludeId ? { key: candidate, id: { not: excludeId } } : { key: candidate },
+        select: { id: true },
+      })
+    ) {
+      candidate = `${base}-${suffix}${ext}`;
+      suffix += 1;
+    }
+    return candidate;
   }
 }

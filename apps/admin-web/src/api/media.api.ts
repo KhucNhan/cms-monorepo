@@ -20,6 +20,11 @@ export interface MediaListParams {
   search?: string;
 }
 
+const authHeaders = (extra?: Record<string, string>) => ({
+  ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
+  ...extra,
+});
+
 export const mediaApi = {
   getAll: (params: MediaListParams = {}) => {
     const qs = new URLSearchParams();
@@ -29,10 +34,7 @@ export const mediaApi = {
     if (params.search) qs.set('search', params.search);
     const query = qs.toString() ? `?${qs}` : '';
     return fetch(`${BASE_URL}/media${query}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
-      },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json();
@@ -43,10 +45,7 @@ export const mediaApi = {
 
   getOne: (id: string) =>
     fetch(`${BASE_URL}/media/${id}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
-      },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json();
@@ -57,11 +56,11 @@ export const mediaApi = {
   upload: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
+    // NOTE: No Content-Type header — browser sets it automatically with
+    // the correct multipart/form-data boundary.
     return fetch(`${BASE_URL}/media/upload`, {
       method: 'POST',
-      headers: {
-        ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
-      },
+      headers: authHeaders(),
       body: formData,
       credentials: 'include',
     }).then(async (res) => {
@@ -71,13 +70,24 @@ export const mediaApi = {
     });
   },
 
+  rename: (id: string, name: string) =>
+    fetch(`${BASE_URL}/media/${id}/rename`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+      body: JSON.stringify({ name }),
+    }).then(async (res) => {
+      const payload = await res.json();
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Rename failed', payload);
+      return (payload.data ?? payload) as MediaItem;
+    }),
+
+  // FIX: No Content-Type on DELETE — sending it with no body causes Fastify to
+  // attempt body parsing and return 400 Bad Request.
   delete: (id: string) =>
     fetch(`${BASE_URL}/media/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
-      },
+      headers: authHeaders(),
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json().catch(() => ({}));
