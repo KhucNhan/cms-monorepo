@@ -10,5 +10,6 @@ var ErrorCode;
     ErrorCode["CONFLICT"] = "CONFLICT";
     ErrorCode["UNKNOWN_BLOCK_TYPE"] = "UNKNOWN_BLOCK_TYPE";
     ErrorCode["INTERNAL_ERROR"] = "INTERNAL_ERROR";
+    ErrorCode["MEDIA_IN_USE"] = "MEDIA_IN_USE";
 })(ErrorCode || (exports.ErrorCode = ErrorCode = {}));
 //# sourceMappingURL=index.js.map

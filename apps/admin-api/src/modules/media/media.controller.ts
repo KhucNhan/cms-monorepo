@@ -66,8 +66,11 @@ export class MediaController {
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('media:delete')
-  @ApiOperation({ summary: 'Delete a media file' })
-  remove(@Param('id') id: string) {
-    return this.mediaService.delete(id);
+  @ApiOperation({ summary: 'Delete a media file (or force-delete if in use)' })
+  remove(
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ) {
+    return this.mediaService.delete(id, force === 'true');
   }
 }

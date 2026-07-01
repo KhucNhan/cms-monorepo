@@ -154,14 +154,14 @@ export function SettingsPage() {
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
                     {filteredUsers.map((user) => {
-                      const createdAt = (user as unknown as { createdAt?: string }).createdAt;
-                      const updatedAt = (user as unknown as { updatedAt?: string }).updatedAt;
-                      const formatDate = (value?: string) =>
-                        value
-                          ? new Date(value).toLocaleDateString('en-GB', {
-                              day: '2-digit', month: 'short', year: 'numeric',
-                            })
-                          : '—';
+                      // const createdAt = (user as unknown as { createdAt?: string }).createdAt;
+                      // const updatedAt = (user as unknown as { updatedAt?: string }).updatedAt;
+                      // const formatDate = (value?: string) =>
+                      //   value
+                      //     ? new Date(value).toLocaleDateString('en-GB', {
+                      //         day: '2-digit', month: 'short', year: 'numeric',
+                      //       })
+                      //     : '—';
 
                       return (
                         <tr

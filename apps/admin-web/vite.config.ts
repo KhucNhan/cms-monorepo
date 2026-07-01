@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@cms/block-registry': path.resolve(__dirname, '../../packages/block-registry/src/registry.ts'),
+      '@cms/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
     },
   },
   server: {

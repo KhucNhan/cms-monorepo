@@ -33,20 +33,20 @@ export function useMedia(filters: MediaFilters = {}) {
     fetch();
   }, [fetch]);
 
-  const deleteMedia = useCallback(async (id: string) => {
-    await mediaApi.delete(id);
-    setState((s) => {
-      if (!s.data) return s;
-      return {
-        ...s,
-        data: {
-          ...s.data,
-          data: s.data.data.filter((m) => m.id !== id),
-          meta: { ...s.data.meta, total: s.data.meta.total - 1 },
-        },
-      };
-    });
-  }, []);
+  const deleteMedia = useCallback(async (id: string, force = false) => {
+  await mediaApi.delete(id, force); // MediaInUseError sẽ bubble lên cho component xử lý
+  setState((s) => {
+    if (!s.data) return s;
+    return {
+      ...s,
+      data: {
+        ...s.data,
+        data: s.data.data.filter((m) => m.id !== id),
+        meta: { ...s.data.meta, total: s.data.meta.total - 1 },
+      },
+    };
+  });
+}, []);
 
   const uploadMedia = useCallback(async (file: File) => {
     const created = await mediaApi.upload(file);

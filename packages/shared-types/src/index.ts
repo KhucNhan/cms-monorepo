@@ -38,6 +38,7 @@ export enum ErrorCode {
   CONFLICT            = 'CONFLICT',
   UNKNOWN_BLOCK_TYPE  = 'UNKNOWN_BLOCK_TYPE',
   INTERNAL_ERROR      = 'INTERNAL_ERROR',
+  MEDIA_IN_USE        = 'MEDIA_IN_USE',
 }
 
 // ─────────────────────────────────────────────────────────

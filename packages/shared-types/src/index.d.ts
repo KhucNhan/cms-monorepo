@@ -25,7 +25,8 @@ export declare enum ErrorCode {
     NOT_FOUND = "NOT_FOUND",
     CONFLICT = "CONFLICT",
     UNKNOWN_BLOCK_TYPE = "UNKNOWN_BLOCK_TYPE",
-    INTERNAL_ERROR = "INTERNAL_ERROR"
+    INTERNAL_ERROR = "INTERNAL_ERROR",
+    MEDIA_IN_USE = "MEDIA_IN_USE",
 }
 export type PermissionResource = 'page' | 'media' | 'user';
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete' | 'publish';

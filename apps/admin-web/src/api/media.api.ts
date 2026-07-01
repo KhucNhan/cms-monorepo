@@ -20,6 +20,28 @@ export interface MediaListParams {
   search?: string;
 }
 
+// Một nơi media đang được tham chiếu (bất kể status của pageVersion)
+export interface MediaUsageInfo {
+  blockId: string;
+  blockType: string;      // ví dụ 'hero', 'faq'
+  pageId: string;
+  pageTitle: string;
+  pageSlug: string;
+  pageVersionId: string;
+  pageVersionStatus: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+}
+
+// Lỗi riêng khi xóa media bị chặn vì đang được dùng — FE bắt lỗi này để
+// hiện modal xác nhận lần 2 thay vì toast lỗi thông thường.
+export class MediaInUseError extends ApiClientError {
+  usages: MediaUsageInfo[];
+  constructor(status: number, message: string, usages: MediaUsageInfo[]) {
+    super(status, message, { usages });
+    this.name = 'MediaInUseError';
+    this.usages = usages;
+  }
+}
+
 const authHeaders = (extra?: Record<string, string>) => ({
   ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
   ...extra,
@@ -56,8 +78,6 @@ export const mediaApi = {
   upload: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    // NOTE: No Content-Type header — browser sets it automatically with
-    // the correct multipart/form-data boundary.
     return fetch(`${BASE_URL}/media/upload`, {
       method: 'POST',
       headers: authHeaders(),
@@ -82,16 +102,29 @@ export const mediaApi = {
       return (payload.data ?? payload) as MediaItem;
     }),
 
-  // FIX: No Content-Type on DELETE — sending it with no body causes Fastify to
-  // attempt body parsing and return 400 Bad Request.
-  delete: (id: string) =>
-    fetch(`${BASE_URL}/media/${id}`, {
+  /**
+   * Xóa media.
+   * - Lần gọi đầu (force=false, mặc định): nếu media đang được block nào đó tham
+   *   chiếu (bất kể status DRAFT/PUBLISHED/ARCHIVED của pageVersion chứa block đó),
+   *   BE trả 409 { error: { code: 'MEDIA_IN_USE', details: MediaUsageInfo[] } }
+   *   → FE ném MediaInUseError để UI hiện modal xác nhận với danh sách nơi đang dùng.
+   * - Gọi lại với force=true (sau khi user xác nhận): BE xóa media VÀ tự động
+   *   loại bỏ reference tới media này khỏi field `data` (JSONB) của các block liên quan.
+   */
+  delete: (id: string, force = false) =>
+    fetch(`${BASE_URL}/media/${id}${force ? '?force=true' : ''}`, {
       method: 'DELETE',
       headers: authHeaders(),
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Delete failed', payload);
+      if (!res.ok) {
+        if (res.status === 409 && payload?.error?.code === 'MEDIA_IN_USE') {
+          const usages: MediaUsageInfo[] = payload.error.details ?? [];
+          throw new MediaInUseError(res.status, payload.error.message ?? 'Media is in use', usages);
+        }
+        throw new ApiClientError(res.status, payload.message ?? payload?.error?.message ?? 'Delete failed', payload);
+      }
       return payload.data ?? payload;
     }),
 };
