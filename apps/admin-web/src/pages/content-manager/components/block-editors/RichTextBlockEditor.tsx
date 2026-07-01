@@ -1,4 +1,5 @@
 import type { RichTextBlockData } from '@/types';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   contentToHtmlFallback,
   getRichTextDisplayText,
@@ -27,16 +28,24 @@ export function RichTextBlockEditor({ data, onChange }: RichTextBlockEditorProps
     <div className="flex flex-col gap-md">
       <div className="flex flex-col gap-xs">
         <label className="text-label-md font-bold text-on-surface">Text Alignment</label>
-        <select
+        <Select
           value={textAlign}
-          onChange={(e) => onChange({ ...data, textAlign: e.target.value as RichTextBlockData['textAlign'] })}
-          className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none max-w-xs"
+          onValueChange={(value) =>
+            onChange({ ...data, textAlign: value as RichTextBlockData['textAlign'] })
+          }
         >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-          <option value="justify">Justify</option>
-        </select>
+          <SelectTrigger className="bg-surface border-outline-variant max-w-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-surface text-on-surface border border-outline-variant">
+            <SelectGroup>
+              <SelectItem value="left">Left</SelectItem>
+              <SelectItem value="center">Center</SelectItem>
+              <SelectItem value="right">Right</SelectItem>
+              <SelectItem value="justify">Justify</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex flex-col gap-xs">
