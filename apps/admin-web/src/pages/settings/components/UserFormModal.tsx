@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AdminUser, RoleOption } from '@/api/users.api';
 
 interface UserFormModalProps {
@@ -59,8 +61,13 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md mx-md">
+    <Dialog open onOpenChange={() => {/* no-op: chỉ đóng qua nút X hoặc Cancel */}}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+        className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md"
+      >
         <div className="flex justify-between items-center mb-lg">
           <h3 className="text-h3 font-h3 text-on-surface">
             {isCreate ? 'Create User' : 'Edit User'}
@@ -102,17 +109,20 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
 
           <div className="flex flex-col gap-xs">
             <label className="text-label-md font-bold text-on-surface">Role</label>
-            <select
-              value={roleId}
-              onChange={(e) => setRoleId(e.target.value)}
-              className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
-            >
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
+            <Select value={roleId} onValueChange={(value) => setRoleId(value)}>
+              <SelectTrigger className="bg-surface border-outline-variant">
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent className="bg-surface text-on-surface border border-outline-variant">
+                <SelectGroup>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
 
           {error && (
@@ -131,7 +141,7 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

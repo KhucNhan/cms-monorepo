@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MediaPickerModal } from '@/pages/media-library/components/MediaPickerModal';
 import { mediaApi } from '@/api/media.api';
 import type { HeroBlockData, MediaItem } from '@/types';
@@ -113,15 +114,21 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
 
         <div className="flex flex-col gap-xs">
           <label className="text-label-md font-bold text-on-surface">Alignment</label>
-          <select
+          <Select
             value={alignment}
-            onChange={(e) => onChange({ ...data, alignment: e.target.value as 'left' | 'center' | 'right' })}
-            className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
+            onValueChange={(value) => onChange({ ...data, alignment: value as 'left' | 'center' | 'right' })}
           >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
+            <SelectTrigger className="bg-surface border-outline-variant">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-surface text-on-surface border border-outline-variant">
+              <SelectGroup>
+                <SelectItem value="left">Left</SelectItem>
+                <SelectItem value="center">Center</SelectItem>
+                <SelectItem value="right">Right</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-xs">

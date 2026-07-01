@@ -1,4 +1,5 @@
 import { getAllBlockDefinitions } from '@cms/block-registry';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface BlockPickerModalProps {
   onSelect: (type: string) => void;
@@ -18,8 +19,13 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
   const definitions = getAllBlockDefinitions();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md mx-md">
+    <Dialog open onOpenChange={() => {/* no-op: chỉ đóng qua nút X */}}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+        className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md"
+      >
         <div className="flex justify-between items-center mb-md border-b border-outline-variant pb-sm">
           <h3 className="text-h3 font-h3 text-on-surface">Select Block Type</h3>
           <button
@@ -29,7 +35,7 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        
+
         <p className="text-body-md text-on-surface-variant mb-lg">
           Choose a block type to insert into your page. This will populate with its default settings.
         </p>
@@ -56,7 +62,7 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
             );
           })}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
