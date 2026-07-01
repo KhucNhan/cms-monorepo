@@ -46,4 +46,14 @@ export class PageVersionsController {
   deleteDraft(@Param('id') id: string) {
     return this.pageVersionsService.deleteDraft(id);
   }
+
+  @Post(':id/revert')
+  @RequirePermissions('page:create')
+  @ApiOperation({ summary: 'Revert page to a ARCHIVED version — deletes current DRAFT and clones target as new DRAFT' })
+  revert(
+    @Param('id') id: string,
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.pageVersionsService.revertToVersion(id, req.user.sub);
+  }
 }

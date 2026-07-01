@@ -91,6 +91,37 @@ export class PageVersionsService {
     }
   }
 
+  /**
+   * Revert page về một ARCHIEVED version cũ.
+   * 1. Validate versionId phải tồn tại và có status ARCHIEVED
+   * 2. Xóa DRAFT hiện tại (nếu có) — blocks bị xóa cascade theo schema
+   * 3. Clone version đó thành DRAFT mới qua createDraftVersion
+   */
+  async revertToVersion(versionId: string, userId: string) {
+    const targetVersion = await this.prisma.pageVersion.findFirst({
+      where: { id: versionId, status: 'ARCHIVED' },
+    });
+
+    if (!targetVersion) {
+      throw new NotFoundException({
+        code: ErrorCode.NOT_FOUND,
+        message: 'Version not found or is not a ARCHIVED version.',
+      });
+    }
+
+    // Xóa DRAFT hiện tại (nếu có) — blocks xóa cascade
+    const existingDraft = await this.prisma.pageVersion.findFirst({
+      where: { pageId: targetVersion.pageId, status: 'DRAFT' },
+    });
+    if (existingDraft) {
+      await this.prisma.block.deleteMany({ where: { pageVersionId: existingDraft.id } });
+      await this.prisma.pageVersion.delete({ where: { id: existingDraft.id } });
+    }
+
+    // Clone ARCHIVED → DRAFT mới (reuse logic của fork)
+    return this.pagesService.createDraftVersion(targetVersion.pageId, versionId, userId);
+  }
+
   /** Delete an orphan DRAFT version (e.g., created by a failed save). */
   async deleteDraft(versionId: string) {
     const version = await this.prisma.pageVersion.findUnique({

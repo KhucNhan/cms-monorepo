@@ -29,6 +29,11 @@ export function PageEditPage() {
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [pendingRevertVersion, setPendingRevertVersion] = useState<{ id: string; createdAt: string } | null>(null);
+  const [showDiscardDraftConfirm, setShowDiscardDraftConfirm] = useState(false);
+  const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
 
   // Synchronous ref tracking for React Router blocker evaluation
   const isDirtyRef = useRef(false);
@@ -375,7 +380,48 @@ export function PageEditPage() {
     }
   };
 
-  // ─── 8. Blocker Actions ────────────────────────────────────────────────────
+  // ─── 8. Revert to Published Version ───────────────────────────────────────
+  const handleRevertClick = (version: { id: string; createdAt: string }) => {
+    setPendingRevertVersion(version);
+  };
+
+  const handleConfirmRevert = async () => {
+    if (!pendingRevertVersion) return;
+    setIsReverting(true);
+    try {
+      await pageVersionsApi.revert(pendingRevertVersion.id);
+      setPendingRevertVersion(null);
+      setShowHistory(false);
+      await initializePage();
+      addToast('Đã revert về version cũ. Kiểm tra lại và Publish khi sẵn sàng.', 'success');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof ApiClientError ? err.message : 'Revert thất bại. Vui lòng thử lại.';
+      addToast(msg, 'error');
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
+  // ─── Discard Draft → revert về Published hiện tại ───────────────────────────
+  const handleConfirmDiscardDraft = async () => {
+    if (!currentVersion || currentVersion.status !== 'DRAFT') return;
+    setIsDiscardingDraft(true);
+    try {
+      await pageVersionsApi.deleteDraft(currentVersion.id);
+      setShowDiscardDraftConfirm(false);
+      await initializePage();
+      addToast('Đã quay về bản đang publish.', 'success');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof ApiClientError ? err.message : 'Thao tác thất bại. Vui lòng thử lại.';
+      addToast(msg, 'error');
+    } finally {
+      setIsDiscardingDraft(false);
+    }
+  };
+
+  // ─── 9. Blocker Actions ────────────────────────────────────────────────────
   const handleSaveAndLeave = async () => {
     if (blocker.state !== 'blocked') return;
     const result = await saveAllChanges();
@@ -438,6 +484,23 @@ export function PageEditPage() {
           <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-manager')}>
             Back
           </Button>
+          <Button
+            variant="ghost"
+            icon="history"
+            onClick={() => setShowHistory((v) => !v)}
+          >
+            History
+          </Button>
+          {isDraftStatus && page?.publishedVersion && (
+            <Button
+              variant="ghost"
+              icon="undo"
+              onClick={() => setShowDiscardDraftConfirm(true)}
+              disabled={isDiscardingDraft || saving || publishing}
+            >
+              Revert to Published
+            </Button>
+          )}
           <Button
             variant="secondary"
             icon="save"
@@ -544,6 +607,141 @@ export function PageEditPage() {
 
       {/* Toasts Feedback */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Discard Draft → Revert to Published Dialog */}
+      {showDiscardDraftConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
+            <h3 className="text-h4 font-semibold text-on-surface">Quay về bản đang Publish?</h3>
+            <p className="mt-xs text-body-sm text-on-surface-variant">
+              DRAFT hiện tại sẽ bị xóa vĩnh viễn. Trang sẽ hiển thị lại nội dung đang publish.
+            </p>
+            {isDirty && (
+              <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
+                ⚠️ Bạn có thay đổi chưa lưu — những thay đổi đó cũng sẽ bị mất.
+              </div>
+            )}
+            <div className="mt-lg flex justify-end gap-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowDiscardDraftConfirm(false)}
+                disabled={isDiscardingDraft}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmDiscardDraft}
+                loading={isDiscardingDraft}
+                disabled={isDiscardingDraft}
+              >
+                {isDiscardingDraft ? 'Đang xử lý…' : 'Xác nhận'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version History Panel */}
+      {showHistory && (
+        <div className="fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-l border-outline-variant bg-surface shadow-xl">
+          <div className="flex items-center justify-between border-b border-outline-variant px-lg py-md">
+            <h2 className="text-h4 font-semibold text-on-surface">Version History</h2>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="rounded-full p-xs text-on-surface-variant hover:bg-surface-container"
+              aria-label="Close history"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-md space-y-sm">
+            {(!page.versions || page.versions.length === 0) && (
+              <p className="text-body-sm text-on-surface-variant px-xs">
+                Chưa có version nào được publish.
+              </p>
+            )}
+            {(page.versions ?? [])
+              .filter((v) => v.status === 'ARCHIVED')
+              .map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface-container px-md py-sm"
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-body-sm font-medium text-on-surface truncate">
+                      {new Date(v.createdAt).toLocaleString('vi-VN')}
+                    </span>
+                    <span className="text-label-sm text-primary font-semibold">ARCHIVED</span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleRevertClick(v)}
+                    disabled={isReverting}
+                  >
+                    Revert
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Backdrop for history panel */}
+      {showHistory && (
+        <div
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={() => setShowHistory(false)}
+        />
+      )}
+
+      {/* Revert Confirm Dialog */}
+      {pendingRevertVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
+            <h3 className="text-h4 font-semibold text-on-surface">Revert về version này?</h3>
+            <p className="mt-xs text-body-sm text-on-surface-variant">
+              Version:{' '}
+              <span className="font-medium text-on-surface">
+                {new Date(pendingRevertVersion.createdAt).toLocaleString('vi-VN')}
+              </span>
+            </p>
+
+            {/* Warning message tùy trạng thái draft */}
+            <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
+              {isDirty
+                ? '⚠️ Bạn có thay đổi chưa lưu. Revert sẽ mất toàn bộ thay đổi đó.'
+                : isDraftStatus
+                ? '⚠️ DRAFT hiện tại sẽ bị xóa và thay thế bằng bản sao của version này.'
+                : 'Một DRAFT mới sẽ được tạo từ version này để bạn review trước khi publish.'}
+            </div>
+
+            <div className="mt-lg flex justify-end gap-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPendingRevertVersion(null)}
+                disabled={isReverting}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmRevert}
+                loading={isReverting}
+                disabled={isReverting}
+              >
+                {isReverting ? 'Đang revert…' : 'Xác nhận Revert'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
