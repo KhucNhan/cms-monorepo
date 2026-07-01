@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { cn } from '@/config/cn';
+import { toast as sonnerToast } from 'sonner';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -9,76 +8,34 @@ export interface ToastData {
   type: ToastType;
 }
 
-interface ToastProps {
-  toast: ToastData;
-  onRemove: (id: string) => void;
-}
-
-const config: Record<ToastType, { bg: string; icon: string }> = {
-  success: { bg: 'bg-primary',  icon: 'check_circle' },
-  error:   { bg: 'bg-error',    icon: 'error' },
-  info:    { bg: 'bg-secondary', icon: 'info' },
-};
-
-function Toast({ toast, onRemove }: ToastProps) {
-  const [visible, setVisible] = useState(false);
-  const c = config[toast.type];
-
-  useEffect(() => {
-    // Trigger entry animation
-    const t1 = setTimeout(() => setVisible(true), 10);
-    // Auto-dismiss
-    const t2 = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => onRemove(toast.id), 300);
-    }, 3000);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [toast.id, onRemove]);
-
-  return (
-    <div
-      className={cn(
-        c.bg,
-        'text-white px-md py-sm rounded-lg shadow-xl flex items-center gap-sm',
-        'transform transition-all duration-300',
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
-      )}
-    >
-      <span className="material-symbols-outlined text-[20px]">{c.icon}</span>
-      <span className="text-label-md font-label-md">{toast.message}</span>
-    </div>
-  );
-}
-
 interface ToastContainerProps {
   toasts: ToastData[];
   onRemove: (id: string) => void;
 }
 
-export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
-  return (
-    <div className="fixed bottom-lg right-lg flex flex-col gap-sm z-[100] pointer-events-none">
-      {toasts.map((t) => (
-        <Toast key={t.id} toast={t} onRemove={onRemove} />
-      ))}
-    </div>
-  );
+/**
+ * UI thật đã chuyển sang <Toaster /> (sonner) render 1 lần ở root (main.tsx).
+ * Component này giữ lại CHỈ để không phá vỡ 5 call-site đang render
+ * <ToastContainer toasts={toasts} onRemove={removeToast} /> tại vị trí cũ trong JSX.
+ * Cố tình render null — không được xoá hẳn export này nếu chưa dọn call-site.
+ */
+export function ToastContainer(_props: ToastContainerProps) {
+  return null;
 }
 
-// Simple hook for managing toasts
-let _toastCounter = 0;
-
+// Giữ nguyên signature cũ để 5 page không cần sửa gì:
+// const { toasts, addToast, removeToast } = useToast();
 export function useToast() {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-
   const addToast = (message: string, type: ToastType = 'info') => {
-    const id = String(++_toastCounter);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    if (type === 'success') sonnerToast.success(message);
+    else if (type === 'error') sonnerToast.error(message);
+    else sonnerToast(message);
   };
 
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  // Không còn state cục bộ — sonner tự quản lý stack toast của riêng nó.
+  // toasts/removeToast giữ lại chỉ để khớp type cũ, không còn tác dụng thật.
+  const toasts: ToastData[] = [];
+  const removeToast = (_id: string) => {};
 
   return { toasts, addToast, removeToast };
 }
