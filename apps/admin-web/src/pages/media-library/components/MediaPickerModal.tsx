@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useMedia } from '@/hooks/useMedia';
 import { mediaApi } from '@/api/media.api';
 import { ApiClientError } from '@/api/client';
@@ -64,8 +65,13 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
     : 'No media files yet. Upload an image below.';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full max-w-3xl mx-md max-h-[85vh] flex flex-col">
+    <Dialog open onOpenChange={() => {/* no-op: chỉ đóng qua nút X hoặc Cancel */}}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+        className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0"
+      >
         <div className="flex justify-between items-center p-lg border-b border-outline-variant gap-md">
           <div className="min-w-0">
             <h3 className="text-h3 font-h3 text-on-surface">Choose from Media Library</h3>
@@ -208,7 +214,7 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
             </Button>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
