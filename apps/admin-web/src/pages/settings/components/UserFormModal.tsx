@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import type { AdminUser, RoleOption } from '@/api/users.api';
 
 interface UserFormModalProps {
@@ -59,8 +60,13 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md mx-md">
+    <Dialog open onOpenChange={() => {/* no-op: chỉ đóng qua nút X hoặc Cancel */}}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+        className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md"
+      >
         <div className="flex justify-between items-center mb-lg">
           <h3 className="text-h3 font-h3 text-on-surface">
             {isCreate ? 'Create User' : 'Edit User'}
@@ -131,7 +137,7 @@ export function UserFormModal({ mode, roles, user, onSubmit, onClose }: UserForm
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

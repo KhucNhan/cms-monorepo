@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { pagesApi } from '@/api/pages.api';
 import { ApiClientError } from '@/api/client';
 import type { Page } from '@/types';
@@ -59,8 +60,6 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
     }
   }, [slug, slugError]);
 
-  if (!isOpen) return null;
-
   const formatError = validateSlug(slug);
   const canSubmit = !formatError && !submitting;
 
@@ -98,8 +97,13 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md mx-md">
+    <Dialog open={isOpen} onOpenChange={() => {/* no-op: chỉ đóng qua nút X hoặc Cancel */}}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+        className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md"
+      >
         <div className="flex items-center justify-between mb-lg">
           <h3 className="text-h3 font-h3 text-on-surface">Create New Page</h3>
           <button
@@ -140,7 +144,7 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
