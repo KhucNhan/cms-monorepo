@@ -1,54 +1,109 @@
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+
 import { cn } from '@/config/cn';
 import type { ContentStatus } from '@/types';
 
-interface BadgeProps {
+const badgeVariants = cva(
+  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition-colors',
+  {
+    variants: {
+      variant: {
+        published: 'bg-emerald-100 text-emerald-800',
+        draft: 'bg-amber-100 text-amber-800',
+        archived: 'bg-surface-container-high text-on-surface-variant',
+        tag: 'bg-surface-container-high text-secondary uppercase tracking-tight font-semibold',
+      },
+    },
+    defaultVariants: {
+      variant: 'published',
+    },
+  },
+);
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({
+  className,
+  variant,
+  ...props
+}: BadgeProps) {
+  return (
+    <span
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+Badge.displayName = 'Badge';
+
+const statusConfig: Record<
+  ContentStatus,
+  {
+    dot: string;
+    label: string;
+    variant: 'published' | 'draft' | 'archived';
+  }
+> = {
+  published: {
+    dot: 'bg-emerald-600',
+    label: 'Published',
+    variant: 'published',
+  },
+  draft: {
+    dot: 'bg-amber-600',
+    label: 'Draft',
+    variant: 'draft',
+  },
+  archived: {
+    dot: 'bg-outline',
+    label: 'Archived',
+    variant: 'archived',
+  },
+};
+
+interface StatusBadgeProps {
   status: ContentStatus;
   className?: string;
 }
 
-const config: Record<ContentStatus, { dot: string; bg: string; text: string; label: string }> = {
-  published: {
-    dot:   'bg-emerald-600',
-    bg:    'bg-emerald-100',
-    text:  'text-emerald-800',
-    label: 'Published',
-  },
-  draft: {
-    dot:   'bg-amber-600',
-    bg:    'bg-amber-100',
-    text:  'text-amber-800',
-    label: 'Draft',
-  },
-  archived: {
-    dot:   'bg-outline',
-    bg:    'bg-surface-container-high',
-    text:  'text-on-surface-variant',
-    label: 'Archived',
-  },
-};
+export function StatusBadge({
+  status,
+  className,
+}: StatusBadgeProps) {
+  const config = statusConfig[status];
 
-export function StatusBadge({ status, className }: BadgeProps) {
-  const c = config[status];
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold',
-        c.bg,
-        c.text,
-        className,
-      )}
+    <Badge
+      variant={config.variant}
+      className={className}
     >
-      <span className={cn('w-1.5 h-1.5 rounded-full', c.dot)} />
-      {c.label}
-    </span>
+      <span
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          config.dot,
+        )}
+      />
+      {config.label}
+    </Badge>
   );
 }
 
-// Generic tag badge (for categories)
-export function TagBadge({ label }: { label: string }) {
+export function TagBadge({
+  label,
+  className,
+}: {
+  label: string;
+  className?: string;
+}) {
   return (
-    <span className="bg-surface-container-high px-2 py-0.5 rounded text-[11px] font-semibold text-secondary uppercase tracking-tight">
+    <Badge variant="tag" className={className}>
       {label}
-    </span>
+    </Badge>
   );
 }
+
+export { Badge, badgeVariants };
