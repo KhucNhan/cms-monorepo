@@ -1,28 +1,31 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-manager/components/CreatePageModal';
 import type { Page, VersionStatus } from '@/types';
-import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ContentManagerPage() {
-  const navigate    = useNavigate();
-  const [page, setPage]       = useState(1);
-  const [search, setSearch] = useState('');
+  const navigate                = useNavigate();
+  const [page, setPage]         = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [search, setSearch]     = useState('');
 
-  const { pages, total, loading, error, refetch, deletePage } = usePages({
+  // Fetch tất cả, không truyền search — filter client-side như VersionArchivePage
+  const { pages: allPages, total, loading, error, refetch, deletePage } = usePages({
     page,
     pageSize: 20,
-    search: search.trim() || undefined,
   });
+
+  // Filter client-side, không gọi lại API
+  const pages = search.trim()
+    ? allPages.filter((p) => p.slug.toLowerCase().includes(search.trim().toLowerCase()))
+    : allPages;
 
   const [searchParams] = useSearchParams();
 
@@ -31,11 +34,6 @@ export function ContentManagerPage() {
       setIsCreateModalOpen(true);
     }
   }, [searchParams]);
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setPage(1);
-  };
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -53,7 +51,7 @@ export function ContentManagerPage() {
           <SearchInput
             placeholder="Search pages..."
             value={search}
-            onChange={handleSearchChange}
+            onChange={setSearch}
           />
           <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
             New Page

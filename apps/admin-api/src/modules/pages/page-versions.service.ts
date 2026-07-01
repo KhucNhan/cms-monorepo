@@ -92,8 +92,24 @@ export class PageVersionsService {
   }
 
   /**
-   * Revert page về một ARCHIEVED version cũ.
-   * 1. Validate versionId phải tồn tại và có status ARCHIEVED
+   * List ARCHIVED versions.
+   * - pageId provided → versions of that page only (used by history panel)
+   * - pageId omitted  → all archived versions across all pages, includes page.slug
+   */
+  async findArchived(pageId?: string) {
+    return this.prisma.pageVersion.findMany({
+      where: { status: 'ARCHIVED', ...(pageId ? { pageId } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { blocks: true } },
+        page: { select: { id: true, slug: true } },
+      },
+    });
+  }
+
+  /**
+   * Revert page về một PUBLISHED version cũ.
+   * 1. Validate versionId phải tồn tại và có status PUBLISHED
    * 2. Xóa DRAFT hiện tại (nếu có) — blocks bị xóa cascade theo schema
    * 3. Clone version đó thành DRAFT mới qua createDraftVersion
    */
@@ -105,7 +121,7 @@ export class PageVersionsService {
     if (!targetVersion) {
       throw new NotFoundException({
         code: ErrorCode.NOT_FOUND,
-        message: 'Version not found or is not a ARCHIVED version.',
+        message: 'Version not found or is not an ARCHIVED version.',
       });
     }
 
@@ -118,18 +134,18 @@ export class PageVersionsService {
       await this.prisma.pageVersion.delete({ where: { id: existingDraft.id } });
     }
 
-    // Clone ARCHIVED → DRAFT mới (reuse logic của fork)
+    // Clone PUBLISHED → DRAFT mới (reuse logic của fork)
     return this.pagesService.createDraftVersion(targetVersion.pageId, versionId, userId);
   }
 
-  /** Delete an orphan DRAFT version (e.g., created by a failed save). */
-  async deleteDraft(versionId: string) {
+  /** Delete a DRAFT or ARCHIVED version. PUBLISHED versions are protected. */
+  async deleteVersion(versionId: string) {
     const version = await this.prisma.pageVersion.findUnique({
       where: { id: versionId },
     });
-    if (!version) throw new NotFoundException('Version not found');
-    if (version.status !== 'DRAFT') {
-      throw new BadRequestException('Only DRAFT versions can be deleted');
+    if (!version) throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: 'Version not found' });
+    if (version.status === 'PUBLISHED') {
+      throw new BadRequestException('Published versions cannot be deleted directly.');
     }
     await this.prisma.block.deleteMany({ where: { pageVersionId: versionId } });
     await this.prisma.pageVersion.delete({ where: { id: versionId } });

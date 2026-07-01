@@ -7,6 +7,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/content-manager',      label: 'Content Manager',     icon: 'description' },
   { path: '/block-gallery', label: 'Block Gallery', icon: 'schema' },
   { path: '/media-library',        label: 'Media Library',        icon: 'perm_media' },
+  { path: '/version-archive',      label: 'Version Archive',      icon: 'inventory_2' },
   { path: '/settings',             label: 'Settings',             icon: 'settings' },
 ];
 

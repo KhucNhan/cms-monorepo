@@ -612,13 +612,13 @@ export function PageEditPage() {
       {showDiscardDraftConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
-            <h3 className="text-h4 font-semibold text-on-surface">Quay về bản đang Publish?</h3>
+            <h3 className="text-h4 font-semibold text-on-surface">Back to published version ?</h3>
             <p className="mt-xs text-body-sm text-on-surface-variant">
-              DRAFT hiện tại sẽ bị xóa vĩnh viễn. Trang sẽ hiển thị lại nội dung đang publish.
+              The current draft will be permanently deleted. The page will now display the published content.
             </p>
             {isDirty && (
               <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
-                ⚠️ Bạn có thay đổi chưa lưu — những thay đổi đó cũng sẽ bị mất.
+                ⚠️ If you have unsaved changes, those changes will also be lost.
               </div>
             )}
             <div className="mt-lg flex justify-end gap-sm">
@@ -628,7 +628,7 @@ export function PageEditPage() {
                 onClick={() => setShowDiscardDraftConfirm(false)}
                 disabled={isDiscardingDraft}
               >
-                Hủy
+                Cancel
               </Button>
               <Button
                 variant="primary"
@@ -637,7 +637,7 @@ export function PageEditPage() {
                 loading={isDiscardingDraft}
                 disabled={isDiscardingDraft}
               >
-                {isDiscardingDraft ? 'Đang xử lý…' : 'Xác nhận'}
+                {isDiscardingDraft ? 'Processing...' : 'Confirm'}
               </Button>
             </div>
           </div>
@@ -661,7 +661,7 @@ export function PageEditPage() {
           <div className="flex-1 overflow-y-auto p-md space-y-sm">
             {(!page.versions || page.versions.length === 0) && (
               <p className="text-body-sm text-on-surface-variant px-xs">
-                Chưa có version nào được publish.
+                No version has been published yet.
               </p>
             )}
             {(page.versions ?? [])
@@ -703,7 +703,7 @@ export function PageEditPage() {
       {pendingRevertVersion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-xl bg-surface p-xl shadow-xl">
-            <h3 className="text-h4 font-semibold text-on-surface">Revert về version này?</h3>
+            <h3 className="text-h4 font-semibold text-on-surface">Revert to this version ?</h3>
             <p className="mt-xs text-body-sm text-on-surface-variant">
               Version:{' '}
               <span className="font-medium text-on-surface">
@@ -714,10 +714,11 @@ export function PageEditPage() {
             {/* Warning message tùy trạng thái draft */}
             <div className="mt-md rounded-lg border border-warning/40 bg-warning/10 px-md py-sm text-body-sm text-on-surface">
               {isDirty
-                ? '⚠️ Bạn có thay đổi chưa lưu. Revert sẽ mất toàn bộ thay đổi đó.'
+                ? '⚠️ You have unsaved changes. Reverting will erase all of those changes.'
                 : isDraftStatus
-                ? '⚠️ DRAFT hiện tại sẽ bị xóa và thay thế bằng bản sao của version này.'
-                : 'Một DRAFT mới sẽ được tạo từ version này để bạn review trước khi publish.'}
+                  ? '⚠️ The current DRAFT will be deleted and replaced with a copy of this version.'
+                  : 'A new DRAFT will be created from this version for you to review before publishing.'
+              }
             </div>
 
             <div className="mt-lg flex justify-end gap-sm">
@@ -727,7 +728,7 @@ export function PageEditPage() {
                 onClick={() => setPendingRevertVersion(null)}
                 disabled={isReverting}
               >
-                Hủy
+                Cancel
               </Button>
               <Button
                 variant="primary"
@@ -736,7 +737,7 @@ export function PageEditPage() {
                 loading={isReverting}
                 disabled={isReverting}
               >
-                {isReverting ? 'Đang revert…' : 'Xác nhận Revert'}
+                {isReverting ? 'Revering...' : 'Confirm Revert'}
               </Button>
             </div>
           </div>

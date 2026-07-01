@@ -105,19 +105,6 @@ export function ContentTypeBuilderPage() {
     addToast('Field removed.', 'info');
   };
 
-  // const handleFieldChange = (key: keyof ContentField, value: unknown) => {
-  //   if (!selectedField) return;
-  //   const updated = { ...selectedField, [key]: value };
-  //   setSelectedField(updated);
-  //   setTypes((prev) =>
-  //     prev.map((t) =>
-  //       t.id === activeTypeId
-  //         ? { ...t, fields: t.fields.map((f) => (f.id === selectedField.id ? updated : f)) }
-  //         : t,
-  //     ),
-  //   );
-  // };
-
   return (
     <AppLayout
       title="Block Gallery"
@@ -137,13 +124,6 @@ export function ContentTypeBuilderPage() {
             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider">
               Block Types
             </span>
-            {/* <button
-              className="text-primary hover:text-on-primary-fixed-variant transition-colors"
-              title="Add new type"
-              onClick={() => addToast('Block type creation coming soon.', 'info')}
-            >
-              <span className="material-symbols-outlined">add_box</span>
-            </button> */}
           </div>
 
           <ul className="flex flex-col flex-1">
@@ -200,43 +180,9 @@ export function ContentTypeBuilderPage() {
                   onDragEnd={() => setDragId(null)}
                 />
               ))}
-
-              {/* Add field button */}
-              {/* <button
-                onClick={() => addToast('Field palette coming soon.', 'info')}
-                className="w-full py-xl border-2 border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full border border-outline-variant group-hover:border-primary flex items-center justify-center mb-sm transition-colors">
-                  <span className="material-symbols-outlined">add</span>
-                </div>
-                <span className="font-bold">Add another field</span>
-                <span className="text-label-md opacity-60">Text, Number, Date, Media, and more</span>
-              </button> */}
             </div>
           </div>
         </div>
-
-        {/* ── Right panel: Field Settings ── */}
-        {/* <aside className="w-80 border-l border-outline-variant bg-surface-container-low flex-shrink-0 flex flex-col overflow-hidden">
-          <div className="p-md border-b border-outline-variant bg-surface-container flex items-center gap-sm flex-shrink-0">
-            <span className="material-symbols-outlined text-primary">settings_applications</span>
-            <span className="font-bold text-on-surface">Field Settings</span>
-          </div>
-
-          {selectedField ? (
-            <FieldSettingsPanel
-              field={selectedField}
-              onChange={handleFieldChange}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-xl text-center text-on-surface-variant">
-              <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">
-                touch_app
-              </span>
-              <p className="text-body-md">Select a field to edit its settings</p>
-            </div>
-          )}
-        </aside> */}
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -273,15 +219,6 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDragStart, onDrag
         isDragging && 'scale-[1.01] ring-2 ring-primary/20 z-10',
       )}
     >
-      {/* Drag handle */}
-      {/* <div
-        className={cn(
-          'text-outline-variant group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing',
-          isSelected && 'text-primary',
-        )}
-      >
-        <span className="material-symbols-outlined">drag_indicator</span>
-      </div> */}
 
       {/* Icon */}
       <div className={cn('w-10 h-10 rounded flex items-center justify-center', meta.bg)}>
@@ -300,197 +237,6 @@ function FieldRow({ field, isSelected, isDragging, onSelect, onDragStart, onDrag
           {field.private && ' · Private'}
         </div>
       </div>
-
-      {/* Actions */}
-      {/* <div
-        className={cn(
-          'flex items-center gap-sm transition-opacity',
-          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onSelect}
-          className="p-xs hover:bg-surface-container rounded text-on-surface-variant hover:text-primary transition-colors"
-        >
-          <span className="material-symbols-outlined text-[20px]">edit</span>
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-xs hover:bg-error-container/20 rounded text-error transition-colors"
-        >
-          <span className="material-symbols-outlined text-[20px]">delete</span>
-        </button>
-      </div> */}
     </div>
   );
 }
-
-// ─── FieldSettingsPanel ───────────────────────────────────────────────────────
-
-// interface FieldSettingsPanelProps {
-//   field: ContentField;
-//   onChange: (key: keyof ContentField, value: unknown) => void;
-// }
-
-// function FieldSettingsPanel({ field, onChange }: FieldSettingsPanelProps) {
-//   const meta = FIELD_TYPE_META[field.type] ?? FIELD_TYPE_META['text'];
-
-//   return (
-//     <div className="flex-1 flex flex-col overflow-hidden">
-//       <div className="flex-1 overflow-y-auto custom-scrollbar p-md space-y-xl">
-//         {/* Basic Info */}
-//         <div className="space-y-md">
-//           <label className="block">
-//             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
-//               Display Name
-//             </span>
-//             <input
-//               type="text"
-//               value={field.displayName}
-//               onChange={(e) => onChange('displayName', e.target.value)}
-//               className="w-full bg-white border border-outline rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-//             />
-//           </label>
-
-//           <label className="block">
-//             <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-xs block">
-//               API ID
-//             </span>
-//             <input
-//               type="text"
-//               value={field.apiId}
-//               readOnly
-//               className="w-full bg-surface-variant/50 border border-outline-variant rounded p-sm font-code text-code text-on-surface-variant cursor-not-allowed"
-//             />
-//             <p className="text-[10px] text-on-surface-variant mt-xs">Auto-generated from display name.</p>
-//           </label>
-//         </div>
-
-//         {/* Type selector */}
-//         <div>
-//           <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
-//             Data Type
-//           </span>
-//           <div className="grid grid-cols-2 gap-sm">
-//             {(Object.keys(FIELD_TYPE_META) as FieldType[]).slice(0, 4).map((type) => {
-//               const m = FIELD_TYPE_META[type];
-//               return (
-//                 <button
-//                   key={type}
-//                   onClick={() => onChange('type', type)}
-//                   className={cn(
-//                     'p-sm rounded border flex items-center gap-sm cursor-pointer transition-all',
-//                     field.type === type
-//                       ? 'border-primary bg-primary/5 text-primary'
-//                       : 'border-outline-variant bg-white hover:border-primary/50 text-on-surface-variant',
-//                   )}
-//                 >
-//                   <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
-//                   <span className="text-xs font-semibold">{m.label}</span>
-//                 </button>
-//               );
-//             })}
-//           </div>
-//           <div className="mt-sm">
-//             <span className="text-[10px] text-on-surface-variant">
-//               Current:{' '}
-//               <span className={cn('font-bold', meta.color)}>{meta.label}</span>
-//             </span>
-//           </div>
-//         </div>
-
-//         <hr className="border-outline-variant" />
-
-//         {/* Validations */}
-//         <div>
-//           <span className="text-label-md font-label-md text-secondary uppercase tracking-wider mb-md block">
-//             Validations
-//           </span>
-//           <div className="space-y-sm">
-//             <ToggleRow
-//               label="Required field"
-//               checked={field.required}
-//               onChange={(v) => onChange('required', v)}
-//             />
-//             <ToggleRow
-//               label="Private field"
-//               checked={field.private}
-//               onChange={(v) => onChange('private', v)}
-//             />
-//           </div>
-//         </div>
-
-//         {/* Advanced */}
-//         <details className="group">
-//           <summary className="text-label-md font-label-md text-secondary uppercase tracking-wider flex items-center justify-between cursor-pointer list-none">
-//             <span>Advanced Settings</span>
-//             <span className="material-symbols-outlined transition-transform group-open:rotate-180">
-//               expand_more
-//             </span>
-//           </summary>
-//           <div className="pt-sm space-y-md">
-//             <label className="block">
-//               <span className="text-xs text-on-surface-variant block mb-xs">Default Value</span>
-//               <input
-//                 type="text"
-//                 placeholder="Enter default value..."
-//                 className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-//               />
-//             </label>
-//             <label className="block">
-//               <span className="text-xs text-on-surface-variant block mb-xs">Placeholder Text</span>
-//               <input
-//                 type="text"
-//                 placeholder="Describe the field..."
-//                 className="w-full bg-white border border-outline-variant rounded p-sm text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-//               />
-//             </label>
-//           </div>
-//         </details>
-//       </div>
-
-//       {/* Footer */}
-//       <div className="p-md border-t border-outline-variant flex-shrink-0">
-//         <button className="w-full bg-surface-container-highest text-secondary border border-outline-variant py-sm rounded font-bold hover:bg-outline-variant/20 transition-all">
-//           Reset to Default
-//         </button>
-//       </div>
-//     </div>
-//   );
-// }
-
-// ─── ToggleRow ────────────────────────────────────────────────────────────────
-
-// function ToggleRow({
-//   label,
-//   checked,
-//   onChange,
-// }: {
-//   label: string;
-//   checked: boolean;
-//   onChange: (v: boolean) => void;
-// }) {
-//   return (
-//     <label className="flex items-center justify-between cursor-pointer group select-none">
-//       <span className="text-body-md text-on-surface group-hover:text-primary transition-colors">{label}</span>
-//       <button
-//         type="button"
-//         role="switch"
-//         aria-checked={checked}
-//         onClick={() => onChange(!checked)}
-//         className={cn(
-//           'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20',
-//           checked ? 'bg-primary' : 'bg-outline-variant',
-//         )}
-//       >
-//         <span
-//           className={cn(
-//             'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200',
-//             checked ? 'translate-x-6' : 'translate-x-1',
-//           )}
-//         />
-//       </button>
-//     </label>
-//   );
-// }
