@@ -19,7 +19,7 @@ export function ContentManagerPage() {
   // Fetch tất cả, không truyền search — filter client-side như VersionArchivePage
   const { pages: allPages, total, loading, error, refetch, deletePage } = usePages({
     page,
-    pageSize: 20,
+    pageSize: 5,
   });
 
   // Filter client-side, không gọi lại API
@@ -41,7 +41,8 @@ export function ContentManagerPage() {
     setDeleteId(null);
   };
 
-  const totalPages = Math.ceil(total / 20);
+  const PAGE_SIZE = 5;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <AppLayout
@@ -111,10 +112,10 @@ export function ContentManagerPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
-                      {['Slug', 'Status', 'Versions', 'Last Updated', 'Actions'].map((h, i) => (
+                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Actions'].map((h, i, arr) => (
                         <th
                           key={h}
-                          className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === 4 ? 'text-right' : 'text-left'}`}
+                          className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
                         >
                           {h}
                         </th>
@@ -138,8 +139,8 @@ export function ContentManagerPage() {
               <div className="bg-surface-container-low border-t border-outline-variant p-md flex items-center justify-between">
                 <p className="text-body-md text-on-surface-variant">
                   Showing{' '}
-                  <span className="font-bold">{(page - 1) * 20 + 1}</span> to{' '}
-                  <span className="font-bold">{Math.min(page * 20, total)}</span> of{' '}
+                  <span className="font-bold">{(page - 1) * PAGE_SIZE + 1}</span> to{' '}
+                  <span className="font-bold">{Math.min(page * PAGE_SIZE, total)}</span> of{' '}
                   <span className="font-bold">{total}</span> pages
                 </p>
                 <div className="flex items-center gap-xs">
@@ -214,8 +215,25 @@ function PageRow({
   const versionCount = page._count?.versions ?? 0;
   const cfg          = STATUS_CONFIG[status as VersionStatus] ?? STATUS_CONFIG.DRAFT;
 
+  const seoMeta = (page.publishedVersion as unknown as { seoMeta?: { title?: string; description?: string } } | undefined)?.seoMeta;
+  const seoTitle = seoMeta?.title ?? '—';
+  const seoDescription = seoMeta?.description ?? '—';
+
   return (
-    <tr className="hover:bg-primary/5 transition-colors group">
+    <tr
+      onClick={onEdit}
+      className="hover:bg-primary/5 transition-colors group cursor-pointer"
+    >
+      {/* SEO Title */}
+      <td className="p-md text-body-md text-on-surface-variant max-w-[200px] truncate">
+        {seoTitle}
+      </td>
+
+      {/* SEO Description */}
+      <td className="p-md text-body-md text-on-surface-variant max-w-[260px] truncate">
+        {seoDescription}
+      </td>
+
       {/* Slug */}
       <td className="p-md">
         <div className="flex items-center gap-sm">
@@ -224,7 +242,6 @@ function PageRow({
             <p className="text-[14px] font-semibold text-on-background truncate max-w-[280px]">
               /{page.slug}
             </p>
-            {/* <p className="text-[11px] text-on-surface-variant font-mono">{page.id.slice(0, 8)}…</p> */}
           </div>
         </div>
       </td>
@@ -245,16 +262,12 @@ function PageRow({
 
       {/* Actions */}
       <td className="p-md text-right">
-        <div className="flex items-center justify-end gap-xs opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-xs">
           <button
-            onClick={onEdit}
-            className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-            title="Edit page"
-          >
-            <span className="material-symbols-outlined text-[20px]">edit</span>
-          </button>
-          <button
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
             title="Delete page"
           >

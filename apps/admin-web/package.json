@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@cms/block-registry": "workspace:*",
+    "@cms/shared-types": "workspace:*",
+    "@cms/admin-api": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.22.0",

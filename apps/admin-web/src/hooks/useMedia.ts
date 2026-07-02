@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { mediaApi, type MediaListResponse } from '@/api/media.api';
+import { mediaApi, type MediaListResponse, type MediaUsageInfo } from '@/api/media.api';
 import { ApiClientError } from '@/api/client';
 import type { MediaFilters } from '@/types';
 
@@ -48,6 +48,11 @@ export function useMedia(filters: MediaFilters = {}) {
     });
   }, []);
 
+  /** Check trước khi xóa: media đang bị block nào tham chiếu (mọi status pageVersion). */
+  const checkMediaUsage = useCallback((id: string): Promise<MediaUsageInfo[]> => {
+    return mediaApi.getUsages(id);
+  }, []);
+
   const uploadMedia = useCallback(async (file: File) => {
     const created = await mediaApi.upload(file);
     setState((s) => {
@@ -89,6 +94,7 @@ export function useMedia(filters: MediaFilters = {}) {
     error: state.error,
     refetch: fetch,
     deleteMedia,
+    checkMediaUsage,
     uploadMedia,
     renameMedia,
   };

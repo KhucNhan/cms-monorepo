@@ -20,6 +20,28 @@ export interface MediaListParams {
   search?: string;
 }
 
+// Một nơi media đang được tham chiếu (bất kể status của pageVersion)
+export interface MediaUsageInfo {
+  blockId: string;
+  blockType: string;      // ví dụ 'hero', 'faq'
+  pageId: string;
+  pageTitle: string;
+  pageSlug: string;
+  pageVersionId: string;
+  pageVersionStatus: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+}
+
+// Lỗi riêng khi xóa media bị chặn vì đang được dùng — FE bắt lỗi này để
+// hiện modal xác nhận lần 2 thay vì toast lỗi thông thường.
+export class MediaInUseError extends ApiClientError {
+  usages: MediaUsageInfo[];
+  constructor(status: number, message: string, usages: MediaUsageInfo[]) {
+    super(status, message, { usages });
+    this.name = 'MediaInUseError';
+    this.usages = usages;
+  }
+}
+
 const authHeaders = (extra?: Record<string, string>) => ({
   ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
   ...extra,
@@ -56,8 +78,6 @@ export const mediaApi = {
   upload: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    // NOTE: No Content-Type header — browser sets it automatically with
-    // the correct multipart/form-data boundary.
     return fetch(`${BASE_URL}/media/upload`, {
       method: 'POST',
       headers: authHeaders(),
@@ -82,8 +102,16 @@ export const mediaApi = {
       return (payload.data ?? payload) as MediaItem;
     }),
 
-  // FIX: No Content-Type on DELETE — sending it with no body causes Fastify to
-  // attempt body parsing and return 400 Bad Request.
+  getUsages: (id: string) =>
+    fetch(`${BASE_URL}/media/${id}/usages`, {
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+    }).then(async (res) => {
+      const payload = await res.json();
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Failed to load media usages', payload);
+      return (payload.data ?? payload) as MediaUsageInfo[];
+    }),
+
   delete: (id: string) =>
     fetch(`${BASE_URL}/media/${id}`, {
       method: 'DELETE',
@@ -91,7 +119,7 @@ export const mediaApi = {
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Delete failed', payload);
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? payload?.error?.message ?? 'Delete failed', payload);
       return payload.data ?? payload;
     }),
 };

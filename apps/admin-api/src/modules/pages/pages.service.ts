@@ -51,7 +51,7 @@ export class PagesService {
         take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
-          publishedVersion: { select: { id: true, status: true, updatedAt: true } },
+          publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
           _count: { select: { versions: true } },
         },
       }),
@@ -108,7 +108,7 @@ export class PagesService {
         },
       },
       include: {
-        publishedVersion: { select: { id: true, status: true, updatedAt: true } },
+        publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
         _count: { select: { versions: true } },
         versions: { orderBy: { createdAt: 'desc' }, take: 1 },
       },

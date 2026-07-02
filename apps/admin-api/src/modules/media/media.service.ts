@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException
 } from '@nestjs/common';
 import { z } from 'zod';
 import { createWriteStream, existsSync, mkdirSync, unlinkSync, renameSync } from 'fs';
@@ -9,6 +10,8 @@ import { join, extname, basename } from 'path';
 import { pipeline } from 'stream/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
+import { getBlockDefinition } from '@cms/block-registry/schema-only';
+
 
 export const listMediaSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -24,6 +27,16 @@ export const renameMediaSchema = z.object({
 });
 
 export type RenameMediaDto = z.infer<typeof renameMediaSchema>;
+
+export interface MediaUsageInfo {
+  blockId: string;
+  blockType: string;
+  pageId: string;
+  pageTitle: string;
+  pageSlug: string;
+  pageVersionId: string;
+  pageVersionStatus: string;
+}
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -155,16 +168,124 @@ export class MediaService {
     });
   }
 
-  async delete(id: string) {
-    const media = await this.findOne(id);
-    const filePath = join(this.uploadDir, media.key);
+  async getUsages(id: string): Promise<MediaUsageInfo[]> {
+    await this.findOne(id); // 404 nếu media không tồn tại
+    return this.findUsages(id);
+  }
 
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
+  async delete(id: string, force = false) {
+    const media = await this.findOne(id);
+    const usages = await this.findUsages(media.id);
+
+    if (usages.length > 0 && !force) {
+      throw new ConflictException({
+        code: ErrorCode.MEDIA_IN_USE,
+        message: `Media is currently used in ${usages.length} block(s).`,
+        details: usages,
+      });
     }
 
+    const filePath = join(this.uploadDir, media.key);
+
+    if (usages.length > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        for (const usage of usages) {
+          const block = await tx.block.findUnique({ where: { id: usage.blockId } });
+          if (!block) continue;
+
+          const strippedData = this.stripMediaReference(block.data, media.id);
+
+          const definition = getBlockDefinition(block.type);
+          const parsed = definition.schema.safeParse(strippedData);
+          if (!parsed.success) {
+            throw new BadRequestException({
+              code: ErrorCode.VALIDATION_ERROR,
+              message: `Cannot remove media reference from block ${block.id} (${block.type}): resulting data is invalid.`,
+              details: parsed.error.flatten(),
+            });
+          }
+
+          await tx.block.update({ where: { id: block.id }, data: { data: parsed.data } });
+        }
+
+        if (existsSync(filePath)) unlinkSync(filePath);
+        await tx.media.delete({ where: { id } });
+      });
+
+      return { deleted: true, strippedFromBlocks: usages.length };
+    }
+
+    if (existsSync(filePath)) unlinkSync(filePath);
     await this.prisma.media.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  /**
+   * Quét mọi block có object con dạng `{ mediaId: <id>, ... }` (hiện tại chỉ
+   * `hero.image` khớp shape này, nhưng không hardcode `type === 'hero'` ở đây
+   * để block type khác thêm media reference sau này không cần sửa lại chỗ này —
+   * chỉ cần theo đúng convention field tên `mediaId` trong schema.ts của block đó).
+   * Lấy usage bất kể pageVersion.status (DRAFT/PUBLISHED/ARCHIVED).
+   */
+  private async findUsages(mediaId: string): Promise<MediaUsageInfo[]> {
+    const blocks = await this.prisma.block.findMany({
+      include: { pageVersion: { include: { page: true } } },
+    });
+
+    const usages: MediaUsageInfo[] = [];
+    for (const block of blocks) {
+      if (this.containsMediaId(block.data, mediaId)) {
+        const seoMeta = block.pageVersion.seoMeta as { title?: string } | null;
+        usages.push({
+          blockId: block.id,
+          blockType: block.type,
+          pageId: block.pageVersion.page.id,
+          pageTitle: seoMeta?.title?.trim() || block.pageVersion.page.slug,
+          pageSlug: block.pageVersion.page.slug,
+          pageVersionId: block.pageVersion.id,
+          pageVersionStatus: block.pageVersion.status,
+        });
+      }
+    }
+    return usages;
+  }
+
+  /** Đệ quy: true nếu tìm thấy object con nào có `mediaId === targetId`. */
+  private containsMediaId(value: unknown, targetId: string): boolean {
+    if (Array.isArray(value)) {
+      return value.some((v) => this.containsMediaId(v, targetId));
+    }
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      if (typeof obj.mediaId === 'string' && obj.mediaId === targetId) return true;
+      return Object.values(obj).some((v) => this.containsMediaId(v, targetId));
+    }
+    return false;
+  }
+
+  /**
+   * Đệ quy clone `data`; với object con nào có `mediaId === targetId`, gỡ
+   * reference bằng cách set `mediaId: ''` và bỏ `url` (nếu có) — KHÔNG null
+   * hoá cả object cha, vì field như `hero.image` là required trong Zod schema
+   * (`z.object({...})` không `.optional()`), null sẽ làm safeParse fail.
+   */
+  private stripMediaReference(value: unknown, targetId: string): unknown {
+    if (Array.isArray(value)) {
+      return value.map((v) => this.stripMediaReference(v, targetId));
+    }
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      if (typeof obj.mediaId === 'string' && obj.mediaId === targetId) {
+        const { url, ...rest } = obj;
+        return { ...rest, mediaId: '' };
+      }
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        out[k] = this.stripMediaReference(v, targetId);
+      }
+      return out;
+    }
+    return value;
   }
 
   private extFromMime(mime: string): string {

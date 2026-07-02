@@ -21,6 +21,10 @@ export const pageVersionsApi = {
   fork: (versionId: string) =>
     apiClient.post<PageVersion>(`/page-versions/${versionId}/fork`, {}),
 
+  /** Update SEO metadata (title/description) of a DRAFT or ARCHIVED version. */
+  updateSeoMeta: (versionId: string, data: { title?: string; description?: string }) =>
+    apiClient.patch<PageVersion>(`/page-versions/${versionId}`, data),
+
   /** Delete a DRAFT or ARCHIVED version. */
   deleteVersion: (versionId: string) =>
     apiClient.delete<void>(`/page-versions/${versionId}`),

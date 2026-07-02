@@ -6,6 +6,7 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useMedia } from '@/hooks/useMedia';
 import { ApiClientError } from '@/api/client';
 import type { MediaItem } from '@/types';
+import { MediaInUseError, type MediaUsageInfo } from '@/api/media.api';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
 
@@ -22,16 +23,23 @@ const MIME_FILTERS: { label: string; value: MimeFilter }[] = [
   { label: 'SVG', value: 'image/svg+xml' },
 ];
 
+interface DeleteTarget {
+  id: string;
+  checkingUsage: boolean;
+  usages: MediaUsageInfo[];
+}
+
 export function MediaLibraryPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [mimeFilter, setMimeFilter] = useState<MimeFilter>('all');
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, addToast, removeToast } = useToast();
 
-  const { media, total, loading, error, refetch, deleteMedia, uploadMedia, renameMedia } = useMedia({
+  const { media, total, loading, error, refetch, checkMediaUsage, deleteMedia, uploadMedia, renameMedia } = useMedia({
     page,
     pageSize: PAGE_SIZE,
     search: search.trim() || undefined,
@@ -67,16 +75,33 @@ export function MediaLibraryPage() {
     }
   };
 
+  // Bấm nút xóa trên card → luôn mở modal ở dạng "chưa biết usage",
+  // usage thật sự chỉ được biết khi BE từ chối lần xóa đầu (409 MEDIA_IN_USE).
+  const openDeleteModal = async (id: string) => {
+  setDeleteTarget({ id, checkingUsage: true, usages: [] });
+  try {
+    const usages = await checkMediaUsage(id); 
+    setDeleteTarget({ id, checkingUsage: false, usages });
+  } catch (err) {
+    const msg = err instanceof ApiClientError ? err.message : 'Failed to check media usage.';
+    addToast(msg, 'error');
+    setDeleteTarget(null);
+  }
+};
+
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await deleteMedia(deleteId);
+      await deleteMedia(deleteTarget.id); // gọi 1 lần duy nhất
       addToast('Media deleted', 'info');
+      setDeleteTarget(null);
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : 'Delete failed.';
       addToast(msg, 'error');
+      setDeleteTarget(null);
     } finally {
-      setDeleteId(null);
+      setDeleting(false);
     }
   };
 
@@ -88,7 +113,7 @@ export function MediaLibraryPage() {
       } catch (err) {
         const msg = err instanceof ApiClientError ? err.message : 'Rename failed.';
         addToast(msg, 'error');
-        throw err; // re-throw so MediaCard can revert its local state
+        throw err;
       }
     },
     [renameMedia, addToast],
@@ -203,7 +228,7 @@ export function MediaLibraryPage() {
                   <MediaCard
                     key={item.id}
                     item={item}
-                    onDelete={() => setDeleteId(item.id)}
+                    onDelete={() => openDeleteModal(item.id)}
                     onRename={(newName) => handleRename(item.id, newName)}
                   />
                 ))}
@@ -236,10 +261,13 @@ export function MediaLibraryPage() {
         </div>
       </div>
 
-      {deleteId && (
+      {deleteTarget && (
         <DeleteModal
+          checkingUsage={deleteTarget.checkingUsage}
+          usages={deleteTarget.usages}
+          loading={deleting}
           onConfirm={handleDelete}
-          onCancel={() => setDeleteId(null)}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
 
@@ -407,23 +435,80 @@ function PaginationButton({
 // ─────────────────────────────────────────────
 // DeleteModal
 // ─────────────────────────────────────────────
-function DeleteModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+function DeleteModal({
+  checkingUsage,
+  usages,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  checkingUsage: boolean;
+  usages: MediaUsageInfo[];
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const inUse = usages.length > 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-sm mx-md">
-        <div className="flex items-center gap-md mb-md">
-          <div className="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center">
-            <span className="material-symbols-outlined text-error">delete</span>
+      <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-md mx-md">
+        {checkingUsage ? (
+          <div className="flex items-center gap-sm py-lg text-on-surface-variant">
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Checking if the image is currently in use...
           </div>
-          <h3 className="text-h3 font-h3 text-on-surface">Delete media?</h3>
-        </div>
-        <p className="text-body-md text-on-surface-variant mb-xl">
-          This will permanently delete the file. This action cannot be undone.
-        </p>
-        <div className="flex gap-md justify-end">
-          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm}>Delete</Button>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-md mb-md">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${inUse ? 'bg-warning/10' : 'bg-error/10'}`}>
+                <span className={`material-symbols-outlined ${inUse ? 'text-warning' : 'text-error'}`}>
+                  {inUse ? 'warning' : 'delete'}
+                </span>
+              </div>
+              <h3 className="text-h3 font-h3 text-on-surface">
+                {inUse ? 'The image is currently in use.' : 'Delete media?'}
+              </h3>
+            </div>
+
+            {inUse ? (
+              <div className="mb-xl">
+                <p className="text-body-md text-on-surface-variant mb-sm">
+                  The image is currently being used at{' '}
+                  {usages.length === 1
+                    ? `block ${usages[0].blockType} page ${usages[0].pageTitle}`
+                    : `${usages.length} places`}
+                  , are you sure you want to delete it? Any data referencing this image in the blocks will be deleted as well.
+                </p>
+                {usages.length > 1 && (
+                  <ul className="text-body-sm text-on-surface-variant list-disc pl-lg space-y-1 max-h-40 overflow-y-auto">
+                    {usages.map((u) => (
+                      <li key={u.blockId}>
+                        block <span className="font-medium text-on-surface">{u.blockType}</span> — page{' '}
+                        <span className="font-medium text-on-surface">{u.pageTitle}</span>{' '}
+                        <span className="text-[11px]">({u.pageVersionStatus.toLowerCase()})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <p className="text-body-md text-on-surface-variant mb-xl">
+                This will permanently delete the file. This action cannot be undone.
+              </p>
+            )}
+
+            <div className="flex gap-md justify-end">
+              <Button variant="ghost" onClick={onCancel} disabled={loading}>Cancel</Button>
+              <Button variant="danger" onClick={onConfirm} loading={loading}>
+                {inUse ? 'Delete anyway' : 'Delete'}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
