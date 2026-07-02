@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { mediaApi, type MediaListResponse } from '@/api/media.api';
+import { mediaApi, type MediaListResponse, type MediaUsageInfo } from '@/api/media.api';
 import { ApiClientError } from '@/api/client';
 import type { MediaFilters } from '@/types';
 
@@ -33,20 +33,25 @@ export function useMedia(filters: MediaFilters = {}) {
     fetch();
   }, [fetch]);
 
-  const deleteMedia = useCallback(async (id: string, force = false) => {
-  await mediaApi.delete(id, force); // MediaInUseError sẽ bubble lên cho component xử lý
-  setState((s) => {
-    if (!s.data) return s;
-    return {
-      ...s,
-      data: {
-        ...s.data,
-        data: s.data.data.filter((m) => m.id !== id),
-        meta: { ...s.data.meta, total: s.data.meta.total - 1 },
-      },
-    };
-  });
-}, []);
+  const deleteMedia = useCallback(async (id: string) => {
+    await mediaApi.delete(id);
+    setState((s) => {
+      if (!s.data) return s;
+      return {
+        ...s,
+        data: {
+          ...s.data,
+          data: s.data.data.filter((m) => m.id !== id),
+          meta: { ...s.data.meta, total: s.data.meta.total - 1 },
+        },
+      };
+    });
+  }, []);
+
+  /** Check trước khi xóa: media đang bị block nào tham chiếu (mọi status pageVersion). */
+  const checkMediaUsage = useCallback((id: string): Promise<MediaUsageInfo[]> => {
+    return mediaApi.getUsages(id);
+  }, []);
 
   const uploadMedia = useCallback(async (file: File) => {
     const created = await mediaApi.upload(file);
@@ -89,6 +94,7 @@ export function useMedia(filters: MediaFilters = {}) {
     error: state.error,
     refetch: fetch,
     deleteMedia,
+    checkMediaUsage,
     uploadMedia,
     renameMedia,
   };

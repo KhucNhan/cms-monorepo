@@ -168,6 +168,11 @@ export class MediaService {
     });
   }
 
+  async getUsages(id: string): Promise<MediaUsageInfo[]> {
+    await this.findOne(id); // 404 nếu media không tồn tại
+    return this.findUsages(id);
+  }
+
   async delete(id: string, force = false) {
     const media = await this.findOne(id);
     const usages = await this.findUsages(media.id);

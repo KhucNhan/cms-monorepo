@@ -63,14 +63,18 @@ export class MediaController {
     });
   }
 
+  @Get(':id/usages')
+  @RequirePermissions('media:read')
+  @ApiOperation({ summary: 'List blocks currently referencing this media' })
+  getUsages(@Param('id') id: string) {
+    return this.mediaService.getUsages(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('media:delete')
-  @ApiOperation({ summary: 'Delete a media file (or force-delete if in use)' })
-  remove(
-    @Param('id') id: string,
-    @Query('force') force?: string,
-  ) {
-    return this.mediaService.delete(id, force === 'true');
+  @ApiOperation({ summary: 'Delete a media file (strips references from blocks if in use)' })
+  remove(@Param('id') id: string) {
+    return this.mediaService.delete(id, true); // FE luôn confirm trước, force luôn true
   }
 }

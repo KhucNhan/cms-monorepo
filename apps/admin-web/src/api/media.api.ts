@@ -102,29 +102,24 @@ export const mediaApi = {
       return (payload.data ?? payload) as MediaItem;
     }),
 
-  /**
-   * Xóa media.
-   * - Lần gọi đầu (force=false, mặc định): nếu media đang được block nào đó tham
-   *   chiếu (bất kể status DRAFT/PUBLISHED/ARCHIVED của pageVersion chứa block đó),
-   *   BE trả 409 { error: { code: 'MEDIA_IN_USE', details: MediaUsageInfo[] } }
-   *   → FE ném MediaInUseError để UI hiện modal xác nhận với danh sách nơi đang dùng.
-   * - Gọi lại với force=true (sau khi user xác nhận): BE xóa media VÀ tự động
-   *   loại bỏ reference tới media này khỏi field `data` (JSONB) của các block liên quan.
-   */
-  delete: (id: string, force = false) =>
-    fetch(`${BASE_URL}/media/${id}${force ? '?force=true' : ''}`, {
+  getUsages: (id: string) =>
+    fetch(`${BASE_URL}/media/${id}/usages`, {
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+    }).then(async (res) => {
+      const payload = await res.json();
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Failed to load media usages', payload);
+      return (payload.data ?? payload) as MediaUsageInfo[];
+    }),
+
+  delete: (id: string) =>
+    fetch(`${BASE_URL}/media/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
       credentials: 'include',
     }).then(async (res) => {
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 409 && payload?.error?.code === 'MEDIA_IN_USE') {
-          const usages: MediaUsageInfo[] = payload.error.details ?? [];
-          throw new MediaInUseError(res.status, payload.error.message ?? 'Media is in use', usages);
-        }
-        throw new ApiClientError(res.status, payload.message ?? payload?.error?.message ?? 'Delete failed', payload);
-      }
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? payload?.error?.message ?? 'Delete failed', payload);
       return payload.data ?? payload;
     }),
 };
