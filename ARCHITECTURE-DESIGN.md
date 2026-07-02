@@ -34,6 +34,39 @@
 - **`apps/web` không bao giờ query Postgres trực tiếp.** Mọi dữ liệu lấy qua Admin API
   (`lib/cms-client.ts`). Nếu thấy import Prisma trong `apps/web` — đó là lỗi kiến trúc, báo lại thay vì sửa tiếp.
 
+## Thiết kế các chức năng mới (Phiên bản mới)
+
+### 2. Quản lý phiên bản trang (Page Version Lifecycle)
+
+- **Loại bỏ Version Archive Manager riêng biệt**: Thay vì có một trang quản lý Archive riêng gây phân mảnh trải nghiệm, toàn bộ lịch sử phiên bản (DRAFT, PUBLISHED, ARCHIVED) được hợp nhất trực tiếp trong bảng điều khiển **History** của Content Manager.
+- **Sắp xếp ưu tiên trong Lịch sử**: DRAFT và PUBLISHED được xếp lên hàng đầu để người quản trị dễ dàng theo dõi trạng thái hiện tại. Các bản ARCHIVED cũ được sắp xếp theo thời gian mới nhất giảm dần ở phía dưới.
+- **Quy trình "Set as Draft" (thay thế nút Revert cũ)**:
+  - Khi người dùng muốn khôi phục một bản ghi cũ (ARCHIVED), họ chọn phiên bản đó và nhấn **Set as Draft**.
+  - Hành động này sẽ **ghi đè/xóa** phiên bản DRAFT hiện tại nếu có (kèm cascade xóa các block liên kết trong DB) để đảm bảo tối đa một bản nháp hoạt động tại một thời điểm, tránh phân nhánh dữ liệu.
+  - Clone dữ liệu từ bản ARCHIVED đích để tạo thành một DRAFT mới để tiếp tục chỉnh sửa an toàn.
+  - Cho phép xóa trực tiếp các bản ghi DRAFT hoặc ARCHIVED lỗi thời ngay trong danh sách lịch sử.
+
+### 3. Hệ thống Thư viện phương tiện (Media Library & Asset Verification)
+
+- **Trình bày lưới 2 hàng × 6 cột (PAGE_SIZE = 12)**: Giao diện thư viện được thiết kế hiển thị chuẩn 12 items trên một trang để đảm bảo tính thẩm mỹ, cân đối trên mọi kích thước màn hình.
+- **Chỉnh sửa tên trực tiếp (Inline Rename)**: Tên file (tên ảnh) hiển thị trực tiếp và có thể nhấp đúp/chỉnh sửa thông qua một input inline mà không cần mở modal chi tiết phức tạp.
+- **Cơ chế cảnh báo xóa phương tiện (Recursive Usage Check)**:
+  - Khi thực hiện xóa một ảnh/media, hệ thống sẽ thực hiện quét đệ quy qua toàn bộ dữ liệu JSONB (`data`) của tất cả các blocks hiện có trong cơ sở dữ liệu để tìm kiếm các thuộc tính `mediaId` khớp với file cần xóa.
+  - Quá trình kiểm tra này hoàn toàn **bỏ qua trạng thái của pageVersion** (kể cả ảnh đó nằm trong bản DRAFT, PUBLISHED hay ARCHIVED của bất cứ trang nào đều được ghi nhận).
+  - Nếu phát hiện tệp đang được sử dụng ở bất kỳ đâu, hệ thống sẽ bật cảnh báo hiển thị danh sách chi tiết các vị trí block/page đang liên kết để người dùng xác nhận trước khi xóa (tránh lỗi đứt gãy liên kết hình ảnh).
+
+### 4. Quản lý SEO & Slug trang (Inline Page Info Editing)
+
+- Người dùng có thể chỉnh sửa trực tiếp thuộc tính `slug` của trang và metadata SEO (`seoMeta.title`, `seoMeta.description`) ngay trong giao diện chỉnh sửa trang (PageEditPage).
+- Thay đổi này được lưu trữ đồng bộ cùng với các khối nội dung khi người dùng lưu bản nháp (**Save Draft**).
+- Thay đổi slug/metadata SEO sẽ chuyển trạng thái của trang thành DRAFT, và chỉ chính thức áp dụng lên môi trường public sau khi được nhấn **Publish**.
+
+### 5. Giao diện thu gọn thanh bên (Collapsible Sidebar)
+
+- Sidebar của admin panel hỗ trợ cơ chế collapse/expand để tối đa hóa không gian thao tác nội dung.
+- Quản lý trạng thái thông qua Zustand store trung tâm (`useSidebarStore`) để đồng bộ mượt mà chiều rộng của cả sidebar và khung nội dung chính (TopNav và AppLayout).
+- Nút kích hoạt toggle thu gọn được đặt đồng nhất ở vị trí góc trái của thanh điều hướng phía trên (TopNav).
+
 ### TODO — thiếu nguồn
 
 Bản mô tả tái cấu trúc gốc (task) giả định root AGENTS.md từng có thêm hai mục rationale riêng —

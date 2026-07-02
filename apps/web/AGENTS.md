@@ -16,6 +16,7 @@
   `admin-web` chưa được đồng bộ sang đây (xem gap ở `apps/admin-web/AGENTS.md`).
 - Route động chính: `app/[slug]/page.tsx`. Revalidate qua webhook `app/api/revalidate/route.ts`
   khi admin-api publish — không tự thêm cơ chế cache khác song song.
+- **Dynamic SEO Metadata**: Trang `app/[slug]/page.tsx` sử dụng hàm `generateMetadata` để đọc cấu hình `seoMeta` (`title`, `description`) từ kết quả API trả về của page và render ra thẻ metadata HTML tương ứng. Nếu không có `seoMeta`, fallback về `page.title` hoặc layout defaults.
 
 ## Lệnh hay dùng
 

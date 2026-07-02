@@ -5,7 +5,6 @@ import { ContentManagerPage }     from '@/pages/content-manager/ContentManagerPa
 import { PageEditPage }            from '@/pages/content-manager/PageEditPage';
 import { ContentTypeBuilderPage } from '@/pages/block-gallery/ContentTypeBuilderPage';
 import { MediaLibraryPage }     from '@/pages/media-library/MediaLibraryPage';
-import { VersionArchivePage }   from '@/pages/version-archive/VersionArchivePage';
 import { SettingsPage }         from '@/pages/settings/SettingsPage';
 import { AuthProvider }           from '@/context/AuthContext';
 import { ProtectedRoute }         from '@/components/ProtectedRoute';
@@ -36,7 +35,6 @@ const router = createBrowserRouter([
           { path: '/pages/:pageId/edit',   element: <PageEditPage /> },
           { path: '/block-gallery',        element: <ContentTypeBuilderPage /> },
           { path: '/media-library',        element: <MediaLibraryPage /> },
-          { path: '/version-archive',      element: <VersionArchivePage /> },
           { path: '/settings',             element: <SettingsPage /> },
         ],
       },

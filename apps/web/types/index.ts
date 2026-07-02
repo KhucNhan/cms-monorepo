@@ -55,5 +55,9 @@ export interface Page {
   id: string;
   slug: string;
   title: string;
+  seoMeta?: {
+    title?: string;
+    description?: string;
+  };
   blocks: Block[];
 }

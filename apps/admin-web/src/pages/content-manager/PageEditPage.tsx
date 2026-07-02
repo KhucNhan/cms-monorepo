@@ -43,8 +43,6 @@ export function PageEditPage() {
   const [slugInput, setSlugInput] = useState('');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
-  // Baseline snapshot to detect changes when saving alongside blocks
-  const [originalSlug, setOriginalSlug] = useState('');
   const [originalMetaTitle, setOriginalMetaTitle] = useState('');
   const [originalMetaDescription, setOriginalMetaDescription] = useState('');
 
@@ -111,7 +109,6 @@ export function PageEditPage() {
       setSlugInput(pageData.slug);
       setMetaTitle(seoMeta.title ?? '');
       setMetaDescription(seoMeta.description ?? '');
-      setOriginalSlug(pageData.slug);
       setOriginalMetaTitle(seoMeta.title ?? '');
       setOriginalMetaDescription(seoMeta.description ?? '');
     } catch (err) {
@@ -347,7 +344,6 @@ export function PageEditPage() {
       setCurrentVersion(draft);                               // switch to draft version
       setBlocks(sortedFresh);                                // sync blocks
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedFresh))); // reset baseline
-      setOriginalSlug(trimmedSlug || page.slug);
       setOriginalMetaTitle(metaTitle.trim());
       setOriginalMetaDescription(metaDescription.trim());
       updateIsDirty(false);
