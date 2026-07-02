@@ -28,7 +28,7 @@ export class PublicPagesController {
       },
     });
 
-    return pages.map((page) => {
+    return pages.map((page: (typeof pages)[number]) => {
       const seoMeta = (page.publishedVersion?.seoMeta ?? {}) as Record<string, unknown>;
       return {
         id: page.id,
@@ -59,7 +59,7 @@ export class PublicPagesController {
     const seoMeta = (page.publishedVersion.seoMeta ?? {}) as Record<string, unknown>;
 
     const blocks = await Promise.all(
-      page.publishedVersion.blocks.map(async (b) => ({
+      page.publishedVersion.blocks.map(async (b: (typeof page.publishedVersion.blocks)[number]) => ({
         id: b.id,
         type: b.type,
         order: b.orderIndex,

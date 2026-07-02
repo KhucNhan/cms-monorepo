@@ -93,7 +93,7 @@ export class BlocksService {
     });
 
     return Promise.all(
-      blocks.map(async (block) => ({
+      blocks.map(async (block: (typeof blocks)[number]) => ({
         ...block,
         data: (await this.enrichBlockData(block.type, block.data)) as object,
       })),
