@@ -66,6 +66,11 @@ export function MediaLibraryPage() {
         await uploadMedia(file);
       }
       addToast(`Uploaded ${files.length} file(s) successfully`, 'success');
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        refetch();
+      }
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : 'Upload failed.';
       addToast(msg, 'error');

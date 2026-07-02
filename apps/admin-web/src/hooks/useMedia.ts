@@ -55,17 +55,6 @@ export function useMedia(filters: MediaFilters = {}) {
 
   const uploadMedia = useCallback(async (file: File) => {
     const created = await mediaApi.upload(file);
-    setState((s) => {
-      if (!s.data) return { ...s, data: { data: [created], meta: { total: 1, page: 1, pageSize: 24, hasNextPage: false } } };
-      return {
-        ...s,
-        data: {
-          ...s.data,
-          data: [created, ...s.data.data],
-          meta: { ...s.data.meta, total: s.data.meta.total + 1 },
-        },
-      };
-    });
     return created;
   }, []);
 

@@ -14,18 +14,29 @@ export function ContentManagerPage() {
   const [page, setPage]         = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [search, setSearch]     = useState('');
+  const [search, setSearch]         = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // Fetch tất cả, không truyền search — filter client-side như VersionArchivePage
-  const { pages: allPages, total, loading, error, refetch, deletePage } = usePages({
+  const PAGE_SIZE = 5;
+
+  // Debounce 300ms trước khi bắn request search — tránh gọi API mỗi lần gõ 1 ký tự
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset về trang 1 mỗi khi search thay đổi để tránh page hiện tại vượt quá totalPages mới
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  // Search thật ở server (BE đã hỗ trợ `search` trong listPagesSchema + PagesService.findAll),
+  // không tự filter/fetch-all ở client — pageSize luôn hợp lệ (≤ 100 theo Zod schema).
+  const { pages, total, loading, error, refetch, deletePage } = usePages({
     page,
-    pageSize: 5,
+    pageSize: PAGE_SIZE,
+    search: debouncedSearch || undefined,
   });
-
-  // Filter client-side, không gọi lại API
-  const pages = search.trim()
-    ? allPages.filter((p) => p.slug.toLowerCase().includes(search.trim().toLowerCase()))
-    : allPages;
 
   const [searchParams] = useSearchParams();
 
@@ -41,7 +52,6 @@ export function ContentManagerPage() {
     setDeleteId(null);
   };
 
-  const PAGE_SIZE = 5;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -131,6 +141,10 @@ export function ContentManagerPage() {
                         onDelete={() => setDeleteId(p.id)}
                       />
                     ))}
+                    {pages.length < PAGE_SIZE &&
+                      Array.from({ length: PAGE_SIZE - pages.length }, (_, i) => (
+                        <FillerRow key={`filler-${i}`} />
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -274,6 +288,16 @@ function PageRow({
             <span className="material-symbols-outlined text-[20px]">delete</span>
           </button>
         </div>
+      </td>
+    </tr>
+  );
+}
+
+function FillerRow() {
+  return (
+    <tr aria-hidden="true" className="pointer-events-none h-[74.133px]">
+      <td className="p-md" colSpan={7}>
+        <span className="invisible text-body-md">&nbsp;</span>
       </td>
     </tr>
   );
