@@ -131,6 +131,10 @@ export function ContentManagerPage() {
                         onDelete={() => setDeleteId(p.id)}
                       />
                     ))}
+                    {pages.length < PAGE_SIZE &&
+                      Array.from({ length: PAGE_SIZE - pages.length }, (_, i) => (
+                        <FillerRow key={`filler-${i}`} />
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -274,6 +278,16 @@ function PageRow({
             <span className="material-symbols-outlined text-[20px]">delete</span>
           </button>
         </div>
+      </td>
+    </tr>
+  );
+}
+
+function FillerRow() {
+  return (
+    <tr aria-hidden="true" className="pointer-events-none h-[74.133px]">
+      <td className="p-md" colSpan={7}>
+        <span className="invisible text-body-md">&nbsp;</span>
       </td>
     </tr>
   );
