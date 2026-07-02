@@ -11,7 +11,7 @@ import { pipeline } from 'stream/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
 import { getBlockDefinition } from '@cms/block-registry/schema-only';
-
+import { PrismaClient, Prisma } from '@prisma/client';
 
 export const listMediaSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -188,7 +188,7 @@ export class MediaService {
     const filePath = join(this.uploadDir, media.key);
 
     if (usages.length > 0) {
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         for (const usage of usages) {
           const block = await tx.block.findUnique({ where: { id: usage.blockId } });
           if (!block) continue;

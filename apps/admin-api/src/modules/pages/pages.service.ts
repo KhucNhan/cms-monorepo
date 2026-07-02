@@ -154,7 +154,7 @@ export class PagesService {
         createdBy,
         blocks: {
           createMany: {
-            data: source.blocks.map((b) => ({
+            data: source.blocks.map((b: (typeof source.blocks)[number]) => ({
               type: b.type,
               orderIndex: b.orderIndex,
               data: b.data as object,

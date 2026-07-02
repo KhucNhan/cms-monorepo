@@ -16,6 +16,9 @@
   Không thêm class-validator decorator song song cho field JSONB này.
 - **Không render HTML** — chỉ trả JSON. Task "làm block đẹp hơn" không thuộc app này.
 - **Publish** = update `pages.publishedVersionId`, không UPDATE trực tiếp version đang published.
+- **Media Check Usages**: `MediaService.findUsages()` quét đệ quy mọi block trong cơ sở dữ liệu để tìm `mediaId` bên trong JSONB `data` bất kể trạng thái `pageVersion.status` (DRAFT/PUBLISHED/ARCHIVED). Khi thêm các trường lưu trữ media mới, luôn đặt key là `mediaId` để cơ chế tự động quét phát hiện.
+- **Revert to Archived (Set as Draft)**: Endpoint `POST /page-versions/:id/revert` thực hiện xóa DRAFT hiện tại nếu có (cascade blocks) và clone version ARCHIVED đó thành DRAFT mới.
+- **Update SEO Meta**: Endpoint `PATCH /page-versions/:id/seo-meta` dùng để update metadata SEO (`title`, `description`) trên các bản DRAFT/ARCHIVED (PUBLISHED bị chặn không được sửa trực tiếp).
 
 ## Lệnh hay dùng
 
