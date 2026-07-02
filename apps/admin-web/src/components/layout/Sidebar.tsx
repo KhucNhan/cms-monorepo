@@ -14,14 +14,14 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-sidebar_width bg-on-secondary-fixed flex flex-col z-50">
       {/* Brand */}
-      <div className="p-xl flex-shrink-0">
+      {/* <div className="p-xl flex-shrink-0">
         <h2 className="text-h2 font-h2 text-primary-fixed font-bold leading-tight">
           Admin Dashboard
         </h2>
         <p className="text-secondary-fixed-dim text-body-md mt-sm opacity-70">
           Management Console
         </p>
-      </div>
+      </div> */}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto custom-scrollbar px-0">
