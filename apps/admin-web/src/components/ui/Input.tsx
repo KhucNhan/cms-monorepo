@@ -1,8 +1,6 @@
 // src/components/ui/Input.tsx
 
 import * as React from 'react';
-// import { Search, X } from 'lucide-react';
-
 import { cn } from '@/config/cn';
 
 export interface InputProps
@@ -10,7 +8,7 @@ export interface InputProps
   label?: string;
   helperText?: string;
   error?: string;
-  icon?: React.ReactNode;
+  icon?: string;
   iconPosition?: 'left' | 'right';
   onIconClick?: () => void;
 }
@@ -61,7 +59,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 onIconClick && 'cursor-pointer',
               )}
             >
-              {icon}
+              <span className="material-symbols-outlined text-[20px]">
+                {icon}
+              </span>
             </button>
           )}
 
@@ -89,7 +89,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 onIconClick && 'cursor-pointer',
               )}
             >
-              {icon}
+              <span className="material-symbols-outlined text-[20px]">
+                {icon}
+              </span>
             </button>
           )}
         </div>
