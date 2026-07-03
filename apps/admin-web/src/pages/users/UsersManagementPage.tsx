@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
@@ -6,16 +6,23 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useUsers } from '@/hooks/useUsers';
 import { ApiClientError } from '@/api/client';
 import { UserFormModal } from './components/UserFormModal';
+import { Can } from '@/components/Can';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { AdminUser } from '@/api/users.api';
 
-export function SettingsPage() {
+const PAGE_SIZE = 10;
+
+export function UsersManagementPage() {
   const { users, roles, loading, error, refetch, createUser, updateUser, deleteUser } = useUsers();
   const { toasts, addToast, removeToast } = useToast();
+  const { can } = usePermissions();
+  const canUpdateUser = can('user:update');
 
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState('');
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -25,6 +32,24 @@ export function SettingsPage() {
       user.role.name.toLowerCase().includes(term),
     );
   }, [search, users]);
+
+  const total = filteredUsers.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Reset về trang 1 khi search thay đổi
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  // Đảm bảo page không vượt quá totalPages (vd sau khi xoá user ở trang cuối)
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredUsers.slice(start, start + PAGE_SIZE);
+  }, [filteredUsers, page]);
 
   const handleCreate = async (payload: { email?: string; password?: string; roleId?: string }) => {
     try {
@@ -73,7 +98,7 @@ export function SettingsPage() {
 
   return (
     <AppLayout
-      title="Settings"
+      title="Users"
       actions={
         <>
           <SearchInput
@@ -81,9 +106,11 @@ export function SettingsPage() {
             value={search}
             onChange={setSearch}
           />
-          <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
-            New User
-          </Button>
+          <Can permission="user:create">
+            <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
+              New User
+            </Button>
+          </Can>
         </>
       }
     >
@@ -153,12 +180,14 @@ export function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {filteredUsers.map((user) => {
+                    {paginatedUsers.map((user) => {
                       return (
                         <tr
                           key={user.id}
-                          onClick={() => setEditUser(user)}
-                          className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                          onClick={canUpdateUser ? () => setEditUser(user) : undefined}
+                          className={`transition-colors group ${
+                            canUpdateUser ? 'hover:bg-primary/5 cursor-pointer' : 'cursor-default'
+                          }`}
                         >
                           <td className="p-md">
                             <div className="flex items-center gap-sm">
@@ -176,16 +205,18 @@ export function SettingsPage() {
                           </td>
                           <td className="p-md text-right">
                             <div className="flex items-center justify-end gap-xs">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteId(user.id);
-                                }}
-                                className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                                title="Delete user"
-                              >
-                                <span className="material-symbols-outlined text-[20px]">delete</span>
-                              </button>
+                              <Can permission="user:delete">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteId(user.id);
+                                  }}
+                                  className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
+                                  title="Delete user"
+                                >
+                                  <span className="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                              </Can>
                             </div>
                           </td>
                         </tr>
@@ -194,6 +225,33 @@ export function SettingsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {totalPages > 1 && (
+                <div className="bg-surface-container-low border-t border-outline-variant p-md flex items-center justify-between">
+                  <p className="text-body-md text-on-surface-variant">
+                    Showing{' '}
+                    <span className="font-bold">{(page - 1) * PAGE_SIZE + 1}</span> to{' '}
+                    <span className="font-bold">{Math.min(page * PAGE_SIZE, total)}</span> of{' '}
+                    <span className="font-bold">{total}</span> users
+                  </p>
+                  <div className="flex items-center gap-xs">
+                    <PaginationButton disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                      <span className="material-symbols-outlined">chevron_left</span>
+                    </PaginationButton>
+                    {getPageNumbers(page, totalPages).map((p) => (
+                      <PaginationButton key={p} active={p === page} onClick={() => setPage(p)}>
+                        {p}
+                      </PaginationButton>
+                    ))}
+                    <PaginationButton
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      <span className="material-symbols-outlined">chevron_right</span>
+                    </PaginationButton>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -228,6 +286,47 @@ export function SettingsPage() {
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </AppLayout>
+  );
+}
+
+/**
+ * Trả về danh sách tối đa 5 số trang để hiển thị, luôn chứa trang hiện tại
+ * (thay vì luôn lấy 5 trang đầu tiên như trong đoạn code tham khảo).
+ */
+function getPageNumbers(page: number, totalPages: number): number[] {
+  const maxButtons = 5;
+  if (totalPages <= maxButtons) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  let start = Math.max(1, page - Math.floor(maxButtons / 2));
+  const end = Math.min(totalPages, start + maxButtons - 1);
+  start = Math.max(1, end - maxButtons + 1);
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+}
+
+function PaginationButton({
+  children,
+  active,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-w-[36px] h-9 px-sm rounded-lg text-label-md font-label-md flex items-center justify-center transition-colors ${
+        active
+          ? 'bg-primary text-on-primary'
+          : 'text-on-surface-variant hover:bg-primary/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

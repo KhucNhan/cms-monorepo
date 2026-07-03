@@ -11,6 +11,7 @@ import { ApiClientError } from '@/api/client';
 import { BlockPickerModal } from './BlockPickerModal';
 import { BlockSectionCard } from './components/BlockSectionCard';
 import { UnsavedChangesModal } from './components/UnsavedChangesModal';
+import { Can } from '@/components/Can';
 import type { PageDetail, Block, PageVersion } from '@/types';
 
 export function PageEditPage() {
@@ -507,7 +508,7 @@ export function PageEditPage() {
   // ─── Render Loading / Error States ────────────────────────────────────────
   if (loading && blocks.length === 0) {
     return (
-      <AppLayout title="Content Manager" >
+      <AppLayout title="Content Management" >
         <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
           <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -521,11 +522,11 @@ export function PageEditPage() {
 
   if (error || !page) {
     return (
-      <AppLayout title="Content Manager" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
+      <AppLayout title="Content Management" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
         <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
           <span className="material-symbols-outlined text-[48px] text-error">error</span>
           <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
-          <Button variant="secondary" onClick={() => navigate('/content-manager')}>
+          <Button variant="secondary" onClick={() => navigate('/content-management')}>
             Back to Pages
           </Button>
         </div>
@@ -563,14 +564,14 @@ export function PageEditPage() {
 
   return (
     <AppLayout
-      title="Content Manager"
+      title="Content Management"
       // breadcrumb={{
         // label: 'Pages',
         // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
       // }}
       actions={
         <div className="flex items-center gap-sm">
-          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-manager')}>
+          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
             Back
           </Button>
           <Button
@@ -590,24 +591,28 @@ export function PageEditPage() {
               Revert to Published
             </Button>
           )}
-          <Button
-            variant="secondary"
-            icon="save"
-            onClick={handleSave}
-            disabled={!isDirty || saving || publishing}
-            loading={saving}
-          >
-            Save Draft
-          </Button>
-          <Button
-            variant="primary"
-            icon="publish"
-            onClick={handlePublish}
-            disabled={saving || publishing || (!isDraftStatus && !isDirty)}
-            loading={publishing}
-          >
-            Publish Live
-          </Button>
+          <Can permission="page:update">
+            <Button
+              variant="secondary"
+              icon="save"
+              onClick={handleSave}
+              disabled={!isDirty || saving || publishing}
+              loading={saving}
+            >
+              Save Draft
+            </Button>
+          </Can>
+          <Can permission="page:publish">
+            <Button
+              variant="primary"
+              icon="publish"
+              onClick={handlePublish}
+              disabled={saving || publishing || (!isDraftStatus && !isDirty)}
+              loading={publishing}
+            >
+              Publish Live
+            </Button>
+          </Can>
         </div>
       }
     >
@@ -635,14 +640,16 @@ export function PageEditPage() {
               </p>
             </div>
             
-            <Button
-              variant="primary"
-              icon="add_box"
-              size="md"
-              onClick={() => setShowPicker(true)}
-            >
-              Add Block
-            </Button>
+            <Can permission="page:update">
+              <Button
+                variant="primary"
+                icon="add_box"
+                size="md"
+                onClick={() => setShowPicker(true)}
+              >
+                Add Block
+              </Button>
+            </Can>
           </div>
 
           {/* Page Info: slug + SEO title/description */}
@@ -861,24 +868,28 @@ export function PageEditPage() {
                   </div>
                   <div className="flex items-center gap-xs flex-shrink-0">
                     {canSetAsDraft && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleRevertClick(v)}
-                        disabled={isReverting || isDeletingVersion}
-                      >
-                        Set as Draft
-                      </Button>
+                      <Can permission="page:update">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleRevertClick(v)}
+                          disabled={isReverting || isDeletingVersion}
+                        >
+                          Set as Draft
+                        </Button>
+                      </Can>
                     )}
                     {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="delete"
-                        onClick={() => handleDeleteVersionClick(v)}
-                        disabled={isReverting || isDeletingVersion}
-                        aria-label="Delete version"
-                      />
+                      <Can permission="page:delete">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon="delete"
+                          onClick={() => handleDeleteVersionClick(v)}
+                          disabled={isReverting || isDeletingVersion}
+                          aria-label="Delete version"
+                        />
+                      </Can>
                     )}
                   </div>
                 </div>

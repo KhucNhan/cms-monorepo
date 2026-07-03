@@ -4,17 +4,18 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
-import { CreatePageModal } from '@/pages/content-manager/components/CreatePageModal';
+import { CreatePageModal } from '@/pages/content-management/components/CreatePageModal';
+import { Can } from '@/components/Can';
 import type { Page, VersionStatus } from '@/types';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ContentManagerPage() {
-  const navigate                = useNavigate();
-  const [page, setPage]         = useState(1);
+export function ContentManagementPage() {
+  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const PAGE_SIZE = 5;
@@ -56,7 +57,7 @@ export function ContentManagerPage() {
 
   return (
     <AppLayout
-      title="Content Manager"
+      title="Content Management"
       actions={
         <>
           <SearchInput
@@ -64,9 +65,11 @@ export function ContentManagerPage() {
             value={search}
             onChange={setSearch}
           />
-          <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
-            New Page
-          </Button>
+          <Can permission="page:create">
+            <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
+              New Page
+            </Button>
+          </Can>
         </>
       }
     >
@@ -122,7 +125,7 @@ export function ContentManagerPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
-                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Actions'].map((h, i, arr) => (
+                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Action'].map((h, i, arr) => (
                         <th
                           key={h}
                           className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
@@ -207,8 +210,8 @@ export function ContentManagerPage() {
 
 const STATUS_CONFIG: Record<VersionStatus, { label: string; classes: string }> = {
   PUBLISHED: { label: 'Published', classes: 'bg-primary/10 text-primary' },
-  DRAFT:     { label: 'Draft',     classes: 'bg-outline-variant/30 text-on-surface-variant' },
-  ARCHIVED:  { label: 'Archived',  classes: 'bg-surface-container-high text-outline' },
+  DRAFT: { label: 'Draft', classes: 'bg-outline-variant/30 text-on-surface-variant' },
+  ARCHIVED: { label: 'Archived', classes: 'bg-surface-container-high text-outline' },
 };
 
 function PageRow({
@@ -220,14 +223,14 @@ function PageRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const status      = page.publishedVersion?.status ?? 'DRAFT';
-  const updatedAt   = page.publishedVersion?.updatedAt
+  const status = page.publishedVersion?.status ?? 'DRAFT';
+  const updatedAt = page.publishedVersion?.updatedAt
     ? new Date(page.publishedVersion.updatedAt).toLocaleDateString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric',
-      })
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
     : '—';
   const versionCount = page._count?.versions ?? 0;
-  const cfg          = STATUS_CONFIG[status as VersionStatus] ?? STATUS_CONFIG.DRAFT;
+  const cfg = STATUS_CONFIG[status as VersionStatus] ?? STATUS_CONFIG.DRAFT;
 
   const seoMeta = (page.publishedVersion as unknown as { seoMeta?: { title?: string; description?: string } } | undefined)?.seoMeta;
   const seoTitle = seoMeta?.title ?? '—';
@@ -277,16 +280,18 @@ function PageRow({
       {/* Actions */}
       <td className="p-md text-right">
         <div className="flex items-center justify-end gap-xs">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
-            title="Delete page"
-          >
-            <span className="material-symbols-outlined text-[20px]">delete</span>
-          </button>
+          <Can permission="page:delete">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
+              title="Delete page"
+            >
+              <span className="material-symbols-outlined text-[20px]">delete</span>
+            </button>
+          </Can>
         </div>
       </td>
     </tr>

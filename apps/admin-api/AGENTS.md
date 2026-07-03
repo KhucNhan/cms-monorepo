@@ -1,14 +1,12 @@
 # AGENTS.md — apps/admin-api
 
-> Đọc `/AGENTS.md` (root) trước nếu chưa đọc — file này chỉ bổ sung quy ước riêng của NestJS app,
-> không lặp lại invariant chung (đã có ở root mục 1). Giải thích "vì sao" các invariant liên quan
-> tới app này: xem `/ARCHITECTURE-DESIGN.md`.
+> Đọc `/AGENTS.md` (root) trước nếu chưa đọc.
 
 ## Quy ước riêng app này
 
-- **Repository pattern bắt buộc**: mọi Prisma query đi qua `*.repository.ts`
-  (`PagesRepository`, `BlocksRepository`...). Không gọi `this.prisma.page.findMany` thẳng trong
-  `*.service.ts`.
+- **KHÔNG dùng repository pattern trong thực tế** (khác tài liệu kiến trúc gốc) — mọi Prisma query
+  gọi thẳng `this.prisma.<model>.xxx()` trong `*.service.ts` (`UsersService`, `MediaService`,
+  `RolesService`...). Giữ nguyên pattern này khi thêm module mới, xem root AGENTS.md mục 1.1.
 - **Response envelope** (`common/interceptors/response.interceptor.ts`):
   `{ success: true, data, meta? }` hoặc `{ success: false, error: { code, message, details } }`.
   Không return raw object/array từ controller.
@@ -20,16 +18,72 @@
 - **Revert to Archived (Set as Draft)**: Endpoint `POST /page-versions/:id/revert` thực hiện xóa DRAFT hiện tại nếu có (cascade blocks) và clone version ARCHIVED đó thành DRAFT mới.
 - **Update SEO Meta**: Endpoint `PATCH /page-versions/:id/seo-meta` dùng để update metadata SEO (`title`, `description`) trên các bản DRAFT/ARCHIVED (PUBLISHED bị chặn không được sửa trực tiếp).
 
+## RBAC — Roles & Permissions (`modules/roles/`)
+
+- Model thật trong Prisma: `Role` — `Permission` — `RolePermission` (bảng nối many-to-many,
+  `@@id([roleId, permissionId])`). **Field quan hệ trên `Role` tên là `rolePermissions`**, không
+  phải `permissions` — dễ gõ sai vì `shared-types.Role.permissions` (DTO trả về FE) lại đặt tên
+  khác với field Prisma thật, đừng nhầm 2 cái này.
+- `Permission` là cặp atomic `{ resource, action }`, unique theo `[resource, action]`.
+  `PermissionResource` hợp lệ: `'page' | 'media' | 'user' | 'role'` (số ít, không phải số nhiều —
+  xem `packages/shared-types/src/index.ts`). `PermissionAction`: `'create' | 'read' | 'update' |
+  'delete' | 'publish'`.
+- Guard dùng chung `RolesGuard` + decorator `@RequirePermissions('resource:action')`
+  (`modules/auth/guards/roles.guard.ts`) — check thẳng trên `JwtPayload.permissions: Permission[]`
+  đã embed sẵn lúc login, **không query DB mỗi request**.
+- **Quy tắc bắt buộc: MỌI route trong MỌI controller phải có `@RequirePermissions`**, kể cả các
+  route `GET` (list/detail) trước đây hay bị bỏ sót — không có route "public" nào giữa các module
+  đã audit (`blocks`, `media`, `pages`, `page-versions`, `users`, `roles`). Khi thêm controller/route
+  mới, luôn tự hỏi "route này thuộc `resource:action` nào trong bảng dưới" trước khi merge, không
+  để route trần chỉ dựa vào `JwtAuthGuard` (xác thực) mà thiếu `RolesGuard` + permission (phân quyền).
+- **Rà soát gần nhất (đã vá các route thiếu permission)**:
+  - `GET /blocks` → `page:read` (trước đó thiếu, chỉ dựa vào JwtAuthGuard).
+  - `GET /pages`, `GET /pages/:idOrSlug` → `page:read` (trước đó thiếu).
+  - `GET /page-versions` (findDraft), `GET /page-versions/archived` → `page:read` (trước đó thiếu).
+  - `PATCH /media/:id/rename` → tạm dùng `media:create` (trước đó thiếu hoàn toàn permission).
+    **Đây là workaround, không phải thiết kế đúng** — `PermissionResource` cho `media` hiện chỉ có
+    `create | read | delete`, chưa có action `update`. Rename là hành động sửa (update), không phải
+    tạo mới, nên dùng tạm `media:create` sẽ gây hiểu nhầm quyền hạn (user có quyền `media:create`
+    nhưng không có quyền `media:read`/`delete` vẫn đổi được tên file — có thể không đúng ý đồ RBAC
+    gốc). Nếu task sau này cần rename tách quyền riêng với upload, phải: (1) thêm
+    `{ resource: 'media', action: 'update' }` vào `ALL_PERMISSIONS` trong `prisma/seed.ts`, (2) chạy
+    lại `pnpm --filter admin-api prisma:seed`, (3) đổi decorator ở `MediaController.rename` thành
+    `@RequirePermissions('media:update')`. Không tự ý làm việc này ngoài phạm vi task được giao.
+- `Permission` trong seed hiện tại (`prisma/seed.ts`, `ALL_PERMISSIONS`) chỉ có 16 permission —
+  không có `media:update` và không có `page:read`-riêng-cho-mỗi-route (dùng chung 1 permission
+  `page:read` cho mọi route đọc của cả `pages` lẫn `blocks` lẫn `page-versions`, vì cả 3 cùng thuộc
+  domain "xem nội dung trang").
+- Endpoint (`roles.controller.ts`, prefix thật `/api/v1/roles`):
+  - `GET /roles` — `role:read` — list role kèm permissions + userCount.
+  - `GET /roles/permissions/list` — `role:read` — list toàn bộ permission có thể gán (không phải
+    `/roles/permissions`, tránh nhầm với `GET /users/roles/list` đã có sẵn ở `UsersController`).
+  - `POST /roles` — `role:create`.
+  - `PATCH /roles/:id` — `role:update` — chỉ đổi tên.
+  - `PATCH /roles/:id/permissions` — `role:update` — ghi đè toàn bộ set permission của role (xoá
+    hết `RolePermission` cũ rồi tạo lại trong 1 transaction) — đây là hành động "grant permission".
+  - `DELETE /roles/:id` — `role:delete` — chặn nếu còn user đang gán role đó (`ConflictException`).
+- Seed permission + gán mặc định cho `admin | editor | viewer` nằm ở `prisma/seed.ts`
+  (`ALL_PERMISSIONS`, `ROLE_PERMISSIONS`) — chạy bằng `pnpm --filter admin-api prisma:seed`.
+
 ## Lệnh hay dùng
 
 ```bash
-pnpm --filter admin-api dev      # :3001
+pnpm --filter admin-api dev              # :3001
 pnpm --filter admin-api build
 pnpm --filter admin-api test
-pnpm db:generate                 # bắt buộc sau khi sửa prisma/schema.prisma
+pnpm --filter admin-api prisma:generate  # bắt buộc sau khi sửa prisma/schema.prisma
+pnpm --filter admin-api prisma:migrate
+pnpm --filter admin-api prisma:seed      # ts-node chạy thẳng .ts, không qua build
 ```
 
 ## Known gap tại chỗ
 
-`package.json` thiếu `"prisma": { "seed": "ts-node prisma/seed.ts" }` — nếu `db:seed` báo lỗi
-"no seed script defined", thêm field này (chi tiết: root AGENTS.md mục 4).
+- `package.json` **không có** field `"prisma": { "seed": "..." }` — chỉ cần thiết nếu dùng
+  `prisma migrate reset` (lệnh này tự tìm field đó để chạy seed sau reset). Nếu luôn gọi trực tiếp
+  `pnpm prisma:seed` như hiện tại thì **không bắt buộc** phải thêm field này, khác với mô tả gốc ở
+  root AGENTS.md mục 4 — chỉ thêm khi thực sự cần `migrate reset`.
+- Global prefix `/api/v1` áp dụng cho toàn bộ controller — khi test bằng Swagger/Postman, path
+  luôn có tiền tố này (ví dụ `POST /api/v1/roles`, không phải `POST /roles`).
+- **`media:update` chưa tồn tại trong `PermissionResource`/seed** — xem mục RBAC phía trên,
+  `PATCH /media/:id/rename` đang tạm mượn `media:create`. Đây là gap cần dọn khi có task RBAC media
+  rõ ràng hơn.

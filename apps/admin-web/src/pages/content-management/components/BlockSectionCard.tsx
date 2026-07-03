@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Block } from '@/types';
 import { BlockDataForm } from './BlockDataForm';
+import { Can } from '@/components/Can';
 
 interface BlockSectionCardProps {
   block: Block;
@@ -119,17 +120,19 @@ export function BlockSectionCard({
 
           <div className="w-px h-5 bg-outline-variant mx-1" />
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all cursor-pointer"
-            title="Delete Block"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-          </button>
+          <Can permission="page:update">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all cursor-pointer"
+              title="Delete Block"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </Can>
         </div>
       </div>
 

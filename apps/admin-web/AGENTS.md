@@ -26,6 +26,49 @@
   - Tên ảnh cho phép nhấp đúp/chỉnh sửa trực tiếp (Inline Rename).
   - Khi xóa ảnh, hệ thống gọi API check usage (`mediaService.getUsages`) quét đệ quy thuộc tính `mediaId` ở mọi block của mọi `pageVersion` (không quan trọng status là gì) và bắt buộc đưa ra cảnh báo chi tiết trước khi xóa.
 - **Edit Slug & SEO Metadata**: Cho phép sửa trực tiếp `slug`, `SEO Title`, `SEO Description` ngay trên giao diện chỉnh sửa trang. Các thay đổi này chỉ lưu vào bản DRAFT hiện tại (hoặc fork ra DRAFT mới nếu đang xem bản PUBLISHED) khi bấm **Save Draft**.
+- **Roles & Permissions Page** (`pages/roles/RolesPage.tsx`):
+  - Layout 2 cột: danh sách role bên trái (kèm số lượng user đang gán), ma trận permission
+    (checkbox nhóm theo `resource`) bên phải.
+  - **Không dùng modal riêng** cho tạo/sửa permission — khác với `SettingsPage.tsx` (users) vốn
+    dùng `UserFormModal`. Rename role và cấp permission là 2 hành động UI riêng biệt trong cùng 1
+    panel, khớp với 2 endpoint backend tách biệt (`PATCH /roles/:id` vs `PATCH /roles/:id/permissions`).
+  - Quyền `canManage` giờ tính qua `usePermissions().can('role:update')` (xem mục RBAC frontend bên
+    dưới), không còn tự `useMemo` đọc thẳng `user.permissions.includes(...)` như bản cũ.
+  - Hook `useRoles.ts` dùng `useState`/`useEffect`/`useCallback` thuần, **không dùng
+    `@tanstack/react-query`** — thư viện này không có trong `package.json` của `admin-web`. Toàn bộ
+    hook data-fetching trong app (`useMedia.ts`, `useUsers.ts`, `useRoles.ts`) đều theo pattern này,
+    tự quản lý state cục bộ, không có cache/invalidate tự động giữa các tab.
+  - `roles.api.ts`: `Role.permissions` là `Permission[]` (object `{id, resource, action}`), khác
+    hoàn toàn với thiết kế nháp ban đầu (`string[]`) — nhớ đúng shape khi sửa code liên quan.
+
+## RBAC Frontend (mới thêm)
+
+- **Một nguồn auth state duy nhất: `context/AuthContext.tsx`.** Trước đây tồn tại song song
+  `hooks/useAuth.ts` với cùng logic (2 `useState` độc lập không đồng bộ) — `LoginPage.tsx`,
+  `RolesPage.tsx`, `TopNav.tsx` từng import nhầm bản hook trong khi `App.tsx`/`ProtectedRoute.tsx`
+  dùng bản Context, khiến login xong `isAuthenticated` ở `ProtectedRoute` không được cập nhật.
+  `hooks/useAuth.ts` đã bị xoá — **luôn import `useAuth` từ `@/context/AuthContext`**, không tạo lại
+  hook trùng tên ở nơi khác.
+- **`hooks/usePermissions.ts`**: hook trung tâm, đọc `user.permissions: string[]` (dạng
+  `"resource:action"`, y hệt string dùng trong `@RequirePermissions()` ở `admin-api`) từ
+  `AuthContext`, không tạo thêm state hay gọi thêm API. API: `can(permission)`, `canAny([...])`,
+  `canAll([...])`.
+- **`components/Can.tsx`**: gate khai báo dùng trong JSX — `<Can permission="role:delete">...</Can>`,
+  hỗ trợ `anyOf`/`allOf`/`fallback`. Đặt phẳng ngang cấp `ProtectedRoute.tsx` trong `components/`,
+  không tạo subfolder riêng cho 1 file.
+- Đây là lớp UX/security-in-depth ở frontend — **backend (`RolesGuard` + `@RequirePermissions`) vẫn
+  là nguồn sự thật duy nhất**; ẩn/disable nút ở FE không thay thế permission check ở BE.
+- Đã áp dụng `Can` cho các "dangerous action": tạo/xoá role (`RolesPage.tsx`), tạo/sửa/xoá user
+  (`UsersManagementPage.tsx`), tạo/xoá page (`ContentManagementPage.tsx`), xoá block
+  (`BlockSectionCard.tsx`), Save Draft / Publish / Add Block / Set as Draft / xoá version
+  (`PageEditPage.tsx`), upload/rename/xoá media (`MediaLibraryPage.tsx`).
+  - Rename media hiện tạm dùng permission `media:create` (không phải `media:update`) để khớp đúng
+    workaround đang có ở backend — xem `apps/admin-api/AGENTS.md` mục RBAC, `media:update` chưa tồn
+    tại trong `PermissionResource`.
+- **`TopNav.tsx`**: user pill không còn hardcode "Admin User / Super Administrator" — hiển thị email
+  thật từ `AuthContext` và nhãn role suy ra từ tập permissions qua `usePermissions()` (do
+  `AuthUser`/JWT hiện chỉ có `roleId`, chưa trả role name — nếu sau này backend thêm role name vào
+  `/auth/me`, nên đổi lại lấy trực tiếp thay vì suy luận qua permission set).
 
 ## Lệnh hay dùng
 

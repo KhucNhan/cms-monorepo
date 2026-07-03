@@ -32,12 +32,14 @@ export class PageVersionsController {
   constructor(private readonly pageVersionsService: PageVersionsService) {}
 
   @Get()
+  @RequirePermissions('page:read')
   @ApiOperation({ summary: 'Find draft version for a page' })
   findDraft(@Query('pageId') pageId: string) {
     return this.pageVersionsService.findDraft(pageId);
   }
 
   @Get('archived')
+  @RequirePermissions('page:read')
   @ApiOperation({ summary: 'List ARCHIVED versions. Pass ?pageId= to filter by page, omit for all pages.' })
   findArchived(@Query('pageId') pageId?: string) {
     return this.pageVersionsService.findArchived(pageId);

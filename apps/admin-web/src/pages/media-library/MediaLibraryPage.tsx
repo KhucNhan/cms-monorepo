@@ -7,6 +7,7 @@ import { useMedia } from '@/hooks/useMedia';
 import { ApiClientError } from '@/api/client';
 import type { MediaItem } from '@/types';
 import { MediaInUseError, type MediaUsageInfo } from '@/api/media.api';
+import { Can } from '@/components/Can';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
 
@@ -134,23 +135,25 @@ export function MediaLibraryPage() {
             value={search}
             onChange={handleSearchChange}
           />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED_TYPES}
-            multiple
-            className="hidden"
-            onChange={(e) => handleUpload(e.target.files)}
-          />
-          <Button
-            variant="primary"
-            icon="upload"
-            size="md"
-            loading={uploading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Upload
-          </Button>
+          <Can permission="media:create">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES}
+              multiple
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files)}
+            />
+            <Button
+              variant="primary"
+              icon="upload"
+              size="md"
+              loading={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Upload
+            </Button>
+          </Can>
           <Button
             variant="ghost"
             icon="refresh"
@@ -218,9 +221,11 @@ export function MediaLibraryPage() {
                   : 'Upload images (JPEG, PNG, GIF, WebP) or SVG files to get started.'}
               </p>
               {mimeFilter === 'all' && (
-                <Button variant="primary" icon="upload" onClick={() => fileInputRef.current?.click()}>
-                  Upload Files
-                </Button>
+                <Can permission="media:create">
+                  <Button variant="primary" icon="upload" onClick={() => fileInputRef.current?.click()}>
+                    Upload Files
+                  </Button>
+                </Can>
               )}
             </div>
           )}
@@ -389,20 +394,24 @@ function MediaCard({
           >
             <span className="material-symbols-outlined text-[18px]">open_in_new</span>
           </a>
-          <button
-            onClick={startRename}
-            className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-secondary shadow-sm"
-            title="Rename"
-          >
-            <span className="material-symbols-outlined text-[18px]">edit</span>
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-error shadow-sm"
-            title="Delete"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-          </button>
+          <Can permission="media:create">
+            <button
+              onClick={startRename}
+              className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-secondary shadow-sm"
+              title="Rename"
+            >
+              <span className="material-symbols-outlined text-[18px]">edit</span>
+            </button>
+          </Can>
+          <Can permission="media:delete">
+            <button
+              onClick={onDelete}
+              className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-error shadow-sm"
+              title="Delete"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </Can>
         </div>
       )}
     </div>

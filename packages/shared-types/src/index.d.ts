@@ -28,7 +28,7 @@ export declare enum ErrorCode {
     INTERNAL_ERROR = "INTERNAL_ERROR",
     MEDIA_IN_USE = "MEDIA_IN_USE",
 }
-export type PermissionResource = 'page' | 'media' | 'user';
+export type PermissionResource = 'page' | 'media' | 'user' | 'role';
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete' | 'publish';
 export type Permission = `${PermissionResource}:${PermissionAction}`;
 export interface PermissionRecord {

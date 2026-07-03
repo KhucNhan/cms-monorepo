@@ -46,7 +46,7 @@ export enum ErrorCode {
 // ─────────────────────────────────────────────────────────
 
 /** Các resource hợp lệ trong hệ thống */
-export type PermissionResource = 'page' | 'media' | 'user';
+export type PermissionResource = 'page' | 'media' | 'user' | 'role';
 
 /** Các action hợp lệ */
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete' | 'publish';

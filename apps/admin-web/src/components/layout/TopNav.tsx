@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/config/cn';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useSidebarStore } from '@/store/sidebar.store';
 
 interface TopNavProps {
@@ -11,8 +12,11 @@ interface TopNavProps {
 
 export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
   const [openUserMenu, setOpenUserMenu] = useState(false);
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const { roleLabel } = usePermissions();
   const { isCollapsed, toggle } = useSidebarStore();
+
+  const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : '??';
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +51,7 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
       )}
     >
       {/* Left */}
-      <div className="flex items-center gap-md !w-[275px] min-w-0">
+      <div className="flex items-center gap-md !w-[345px] min-w-0">
         <div className="flex items-center gap-sm flex-shrink-0">
           <button
             onClick={toggle}
@@ -103,16 +107,16 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
             className="flex items-center gap-sm cursor-pointer hover:bg-surface-container-high px-2 py-1 rounded-full transition-all duration-200"
           >
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-label-md flex-shrink-0">
-              AR
+              {initials}
             </div>
 
             <div className="hidden lg:block text-right">
               <p className="text-label-md font-label-md text-on-surface leading-tight">
-                Admin User
+                {roleLabel}
               </p>
 
               <p className="text-[10px] text-on-surface-variant">
-                Super Administrator
+                {user?.email ?? '—'}
               </p>
             </div>
 
