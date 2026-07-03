@@ -26,10 +26,13 @@ export function RolesPage() {
   const selectedRole: Role | undefined = roles.find((r) => r.id === selectedRoleId);
 
   const selectRole = (role: Role) => {
-    setSelectedRoleId(role.id);
-    setRenamingName(role.name);
-    setDraftPermissionIds(new Set(role.permissions.map((p) => p.id)));
-  };
+  setSelectedRoleId(role.id);
+  setRenamingName(role.name);
+
+  setDraftPermissionIds(
+    new Set((role.permissions ?? []).map((p) => p.id))
+  );
+};
 
   const togglePermission = (permId: string) => {
     if (!canManage) return;
@@ -45,7 +48,7 @@ export function RolesPage() {
     try {
       const role = await createRole(newRoleName.trim());
       setNewRoleName('');
-      selectRole(role);
+      selectRole({ ...role, permissions: role.permissions ?? [], });
       addToast('A new role has been created.', 'success');
     } catch (err) {
       addToast(err instanceof ApiClientError ? err.message : 'Creating a role failed.', 'error');
