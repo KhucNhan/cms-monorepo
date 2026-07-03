@@ -35,6 +35,8 @@ export class MediaController {
   }
 
   @Patch(':id/rename')
+  @RequirePermissions('media:create')
+  @ApiOperation({ summary: 'Rename a media file' })
   async rename(@Param('id') id: string, @Body() body: unknown) {
     const dto = renameMediaSchema.parse(body);
     return this.mediaService.rename(id, dto.name);

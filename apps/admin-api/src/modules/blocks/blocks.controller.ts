@@ -37,6 +37,7 @@ export class BlocksController {
   constructor(private readonly blocksService: BlocksService) {}
 
   @Get()
+  @RequirePermissions('page:read')
   @ApiOperation({ summary: 'Get all blocks in a page version (ordered)' })
   findAll(@Query('pageVersionId') pageVersionId: string) {
     return this.blocksService.findByVersion(pageVersionId);
