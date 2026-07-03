@@ -27,5 +27,14 @@ export function usePermissions() {
   const canAll = (permissions: PermissionString[]): boolean =>
     permissions.every((p) => permissionSet.has(p));
 
-  return { can, canAny, canAll, permissions: user?.permissions ?? [] };
+  // Backend chưa trả role name trong JWT (JwtPayload chỉ có roleId), nên nhãn hiển thị được
+  // suy ra từ tập permissions theo đúng role map: Admin (full) > Editor (create/update page & media)
+  // > Viewer (read-only). Nếu sau này /auth/me trả thêm role name, đổi chỗ này để lấy trực tiếp.
+  const roleLabel = useMemo(() => {
+    if (can('role:create') || can('user:create')) return 'Admin';
+    if (can('page:create') || can('page:update')) return 'Editor';
+    return 'Viewer';
+  }, [permissionSet]);
+
+  return { can, canAny, canAll, roleLabel, permissions: user?.permissions ?? [] };
 }

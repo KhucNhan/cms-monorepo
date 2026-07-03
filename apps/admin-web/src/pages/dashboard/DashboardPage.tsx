@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { usePages } from '@/hooks/usePages';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ const QUICK_ACTIONS = [
     title: 'Add new Entry',
     sub: 'Populate your collections',
     href: '/content-management?create=true',
+    permission: 'page:create' as const,
   },
   // {
   //   icon: 'menu_book',
@@ -81,7 +83,10 @@ const QUICK_ACTIONS = [
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { can, roleLabel } = usePermissions();
+  const canEditPage = can('page:update');
   const { pages, total, loading: pagesLoading } = usePages({ page: 1, pageSize: 4 });
+  const visibleQuickActions = QUICK_ACTIONS.filter((action) => !action.permission || can(action.permission));
   return (
     <AppLayout
       title="Dashboard"
@@ -96,7 +101,7 @@ export function DashboardPage() {
         <div className="max-w-max_content_width mx-auto space-y-xl">
           {/* Welcome */}
           <div>
-            <h1 className="text-h1 font-h1 text-on-background">Welcome back, Admin!</h1>
+            <h1 className="text-h1 font-h1 text-on-background">Welcome back, {roleLabel}!</h1>
             {/* <p className="text-on-surface-variant text-body-md mt-sm">
               Here's what's happening with your content today.
             </p> */}
@@ -134,9 +139,9 @@ export function DashboardPage() {
           </div> */}
 
           {/* Main Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
+          <div className={`grid grid-cols-1 gap-xl ${visibleQuickActions.length > 0 ? 'lg:grid-cols-3' : ''}`}>
             {/* Recent Collections Table */}
-            <div className="lg:col-span-2 bg-surface h-fit rounded-xl border border-outline-variant shadow-sm flex flex-col">
+            <div className={`bg-surface h-fit rounded-xl border border-outline-variant shadow-sm flex flex-col ${visibleQuickActions.length > 0 ? 'lg:col-span-2' : ''}`}>
               <div className="p-lg border-b border-outline-variant flex items-center justify-between">
                 <h3 className="text-h3 font-h3 text-on-surface">Recent Collections</h3>
                 <button onClick={() => navigate('/content-management')} className="text-primary text-label-md font-label-md hover:underline">
@@ -148,10 +153,10 @@ export function DashboardPage() {
                 <table className="w-full text-left">
                   <thead className="bg-surface-container-low">
                     <tr>
-                      {['Page Slug', 'Status', 'Versions', 'Actions'].map((h, i) => (
+                      {['Page Slug', 'Status', 'Versions'].map((h) => (
                         <th
                           key={h}
-                          className={`px-lg py-3 text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === 3 ? 'text-right' : ''}`}
+                          className="px-lg py-3 text-label-md font-label-md text-on-surface-variant uppercase tracking-wider"
                         >
                           {h}
                         </th>
@@ -161,19 +166,25 @@ export function DashboardPage() {
                   <tbody className="divide-y divide-outline-variant">
                     {pagesLoading ? (
                       <tr>
-                        <td colSpan={4} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
+                        <td colSpan={3} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
                           Loading pages…
                         </td>
                       </tr>
                     ) : pages.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
+                        <td colSpan={3} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
                           No pages yet.
                         </td>
                       </tr>
                     ) : (
                       pages.map((page) => (
-                        <tr key={page.id} className="hover:bg-primary/5 transition-colors group">
+                        <tr
+                          key={page.id}
+                          onClick={canEditPage ? () => navigate(`/pages/${page.id}/edit`) : undefined}
+                          className={`transition-colors group ${
+                            canEditPage ? 'hover:bg-primary/5 cursor-pointer' : 'cursor-default'
+                          }`}
+                        >
                           <td className="px-lg py-4">
                             <div className="flex items-center gap-sm">
                               <span className="material-symbols-outlined text-on-surface-variant text-[20px]">article</span>
@@ -194,14 +205,6 @@ export function DashboardPage() {
                           <td className="px-lg py-4 text-body-md text-on-surface-variant">
                             {page._count?.versions ?? 0}
                           </td>
-                          <td className="px-lg py-4 text-right">
-                            <button
-                              onClick={() => navigate(`/pages/${page.id}/edit`)}
-                              className="p-1 hover:bg-surface-container-high rounded transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              <span className="material-symbols-outlined text-primary text-[20px]">edit</span>
-                            </button>
-                          </td>
                         </tr>
                       ))
                     )}
@@ -217,6 +220,7 @@ export function DashboardPage() {
             </div>
 
             {/* Right column */}
+            {visibleQuickActions.length > 0 && (
             <div className="space-y-lg">
               {/* Getting Started card */}
               {/* <div className="bg-primary-container text-on-primary-container p-xl rounded-xl relative overflow-hidden">
@@ -248,7 +252,7 @@ export function DashboardPage() {
               <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg">
                 <h3 className="text-h3 font-h3 text-on-surface mb-md">Quick Actions</h3>
                 <div className="space-y-sm">
-                  {QUICK_ACTIONS.map((action) => (
+                  {visibleQuickActions.map((action) => (
                     <a
                       key={action.title}
                       href={action.href}
@@ -268,6 +272,7 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

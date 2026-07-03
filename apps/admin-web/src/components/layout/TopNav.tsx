@@ -13,16 +13,8 @@ interface TopNavProps {
 export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
   const [openUserMenu, setOpenUserMenu] = useState(false);
   const { logout, user } = useAuth();
-  const { can } = usePermissions();
+  const { roleLabel } = usePermissions();
   const { isCollapsed, toggle } = useSidebarStore();
-
-  // Backend chưa trả role name trong JWT (JwtPayload chỉ có roleId), nên suy ra nhãn hiển thị
-  // từ tập permissions theo đúng role map: Admin (full) > Editor (create/update page & media) > Viewer (read-only).
-  const roleLabel = can('role:create') || can('user:create')
-    ? 'Admin'
-    : can('page:create') || can('page:update')
-      ? 'Editor'
-      : 'Viewer';
 
   const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : '??';
 
