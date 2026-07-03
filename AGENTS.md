@@ -47,6 +47,23 @@ Giải thích chi tiết "vì sao" từng invariant: xem `ARCHITECTURE-DESIGN.md
 - Publish = đổi `pages.publishedVersionId`, không bao giờ UPDATE trực tiếp lên bản đang published.
 - `apps/web` không bao giờ query Postgres trực tiếp — mọi dữ liệu lấy qua Admin API
   (`lib/cms-client.ts`); nếu thấy import Prisma trong `apps/web`, đó là lỗi kiến trúc, báo lại.
+- Global API prefix là `/api/v1` — mọi route NestJS tự động có tiền tố này (xem `main.ts`,
+  `app.setGlobalPrefix('api/v1')` hoặc tương đương). Khi viết tài liệu/test route, luôn ghi đầy đủ
+  `/api/v1/...`, không ghi tắt `/roles` sẽ gây nhầm lẫn khi so với log thật của Nest.
+
+## 1.1 Known deviation — Repository pattern KHÔNG được áp dụng nhất quán
+
+Tài liệu kiến trúc gốc yêu cầu "mọi Prisma query đi qua `*.repository.ts`", nhưng thực tế code hiện
+tại (`users.service.ts`, `media.service.ts`, `roles.service.ts`, `pages.service.ts`...) đều
+**inject thẳng `PrismaService` và gọi `this.prisma.<model>.findMany(...)` trực tiếp trong service**,
+không có `*.repository.ts` nào tồn tại trong bất kỳ module nào đã audit.
+
+- Đây là tech debt đã biết, không phải bug cần "sửa cho khớp tài liệu" khi không được yêu cầu.
+- Khi thêm module mới (ví dụ roles), **theo đúng pattern thật đang có** (gọi thẳng PrismaService
+  trong service), không tự ý tạo `*.repository.ts` riêng — tạo thêm sẽ gây lệch chuẩn giữa các
+  module trong cùng codebase, khó review hơn là giữ nhất quán với cái đã có.
+- Nếu task yêu cầu rõ ràng "áp dụng repository pattern", đó là việc refactor toàn bộ 4+ module cùng
+  lúc, không chỉ module đang sửa — báo lại phạm vi trước khi làm.
 
 ## 2. Lệnh thao tác theo workspace
 
@@ -63,16 +80,19 @@ pnpm build                               # turbo build toàn repo, tôn trọng 
 pnpm lint                                # turbo lint toàn repo
 pnpm test                                # turbo test toàn repo
 
-pnpm db:generate                         # prisma generate (chạy lại sau MỌI thay đổi schema.prisma)
-pnpm db:migrate                          # prisma migrate dev — tạo migration mới + apply
-pnpm db:seed                             # xem mục 4 "known gap" trước khi chạy lệnh này
-pnpm db:studio                           # GUI xem DB tại :5555
+# LƯU Ý: admin-api KHÔNG có script db:generate/db:migrate/db:seed ở root.
+# Tên script thật trong apps/admin-api/package.json là:
+pnpm --filter admin-api exec prisma generate    # hoặc: pnpm --filter admin-api prisma:generate
+pnpm --filter admin-api prisma:migrate          # prisma migrate dev
+pnpm --filter admin-api prisma:seed             # ts-node prisma/seed.ts — chạy trực tiếp .ts, KHÔNG qua build
+pnpm --filter admin-api prisma:studio           # GUI xem DB tại :5555
 ```
 
 Sau khi sửa `packages/block-registry` hoặc `packages/shared-types`, **không cần build package** để
-`admin-web`/`web` thấy thay đổi trong dev — cả hai đều alias thẳng vào `src/` (xem `vite.config.ts`
-`alias['@cms/block-registry']` và `next.config.ts` `transpilePackages`). Chỉ `admin-api` build ra `dist/`
-mới cần `pnpm --filter admin-api build` nếu test bằng bản build thật thay vì `nest start --watch`.
+`admin-web`/`web` thấy thay đổi trong dev — cả hai đều alias thẳng vào `src/`. `packages/shared-types`
+build ra `dist/` và **admin-api import qua `dist/`** — nếu sửa type trong `shared-types` (ví dụ thêm
+resource mới vào `PermissionResource`), phải chạy `pnpm --filter @cms/shared-types build` trước khi
+`admin-api` thấy được, khác với `admin-web`/`web`.
 
 ## 3. Thêm một block type mới
 

@@ -4,11 +4,12 @@ import type { NavItem } from '@/types';
 import { useSidebarStore } from '@/store/sidebar.store';
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/dashboard',       label: 'Dashboard',       icon: 'dashboard' },
+  { path: '/dashboard',           label: 'Dashboard',           icon: 'dashboard' },
   { path: '/content-management', label: 'Content Management', icon: 'description' },
-  { path: '/block-gallery',   label: 'Block Gallery',   icon: 'schema' },
-  { path: '/media-library',   label: 'Media Library',   icon: 'perm_media' },
-  { path: '/user',        label: 'User',        icon: 'user' },
+  { path: '/block-gallery',       label: 'Block Gallery',       icon: 'schema' },
+  { path: '/media-library',       label: 'Media Library',       icon: 'perm_media' },
+  { path: '/users',               label: 'Users',               icon: 'group' },
+  { path: '/roles',               label: 'Roles',               icon: 'policy' },
 ];
 
 export function Sidebar() {

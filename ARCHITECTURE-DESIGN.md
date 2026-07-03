@@ -81,3 +81,12 @@ này dưới dạng narrative/rationale riêng:
 - Nội dung gần nhất với "data flow publish/revalidate" là phần "Route động chính... Revalidate qua
   webhook" trong `apps/web/AGENTS.md` — cũng là mô tả cơ chế thực thi ngắn, không phải rationale dài.
   Không có đoạn nguồn nào giải thích *vì sao* thiết kế revalidate theo webhook thay vì cơ chế khác.
+
+### Cập nhật sau khi triển khai Roles & Permissions
+
+- `PermissionResource` mở rộng thêm `'role'` (bên cạnh `'page' | 'media' | 'user'` gốc) để hỗ trợ
+  RBAC cho chính module role — mọi nơi dùng `@RequirePermissions()` với resource `role` phải build
+  lại `@cms/shared-types` trước khi `admin-api` thấy type mới, vì package này build ra `dist/`
+  (khác `block-registry` alias thẳng `src/`).
+- Repository pattern nêu ở mục 1 phía trên là mục tiêu thiết kế, **không phản ánh code thật hiện
+  tại** — xem root AGENTS.md mục 1.1 để biết deviation cụ thể.

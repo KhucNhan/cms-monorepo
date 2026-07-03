@@ -26,6 +26,22 @@
   - Tên ảnh cho phép nhấp đúp/chỉnh sửa trực tiếp (Inline Rename).
   - Khi xóa ảnh, hệ thống gọi API check usage (`mediaService.getUsages`) quét đệ quy thuộc tính `mediaId` ở mọi block của mọi `pageVersion` (không quan trọng status là gì) và bắt buộc đưa ra cảnh báo chi tiết trước khi xóa.
 - **Edit Slug & SEO Metadata**: Cho phép sửa trực tiếp `slug`, `SEO Title`, `SEO Description` ngay trên giao diện chỉnh sửa trang. Các thay đổi này chỉ lưu vào bản DRAFT hiện tại (hoặc fork ra DRAFT mới nếu đang xem bản PUBLISHED) khi bấm **Save Draft**.
+- **Roles & Permissions Page** (`pages/roles/RolesPage.tsx`):
+  - Layout 2 cột: danh sách role bên trái (kèm số lượng user đang gán), ma trận permission
+    (checkbox nhóm theo `resource`) bên phải.
+  - **Không dùng modal riêng** cho tạo/sửa permission — khác với `SettingsPage.tsx` (users) vốn
+    dùng `UserFormModal`. Rename role và cấp permission là 2 hành động UI riêng biệt trong cùng 1
+    panel, khớp với 2 endpoint backend tách biệt (`PATCH /roles/:id` vs `PATCH /roles/:id/permissions`).
+  - Quyền `canManage` (ẩn/hiện nút Save, checkbox disable) được tính từ
+    `useAuth().user.permissions.includes('role:update')` — `AuthUser.permissions` là `string[]`
+    dạng `"resource:action"` lấy nguyên từ JWT (`/auth/me`), **không phải object**. Đây chỉ là UX
+    ở FE — bảo mật thật nằm ở `RolesGuard` phía backend.
+  - Hook `useRoles.ts` dùng `useState`/`useEffect`/`useCallback` thuần, **không dùng
+    `@tanstack/react-query`** — thư viện này không có trong `package.json` của `admin-web`. Toàn bộ
+    hook data-fetching trong app (`useMedia.ts`, `useUsers.ts`, `useRoles.ts`) đều theo pattern này,
+    tự quản lý state cục bộ, không có cache/invalidate tự động giữa các tab.
+  - `roles.api.ts`: `Role.permissions` là `Permission[]` (object `{id, resource, action}`), khác
+    hoàn toàn với thiết kế nháp ban đầu (`string[]`) — nhớ đúng shape khi sửa code liên quan.
 
 ## Lệnh hay dùng
 
