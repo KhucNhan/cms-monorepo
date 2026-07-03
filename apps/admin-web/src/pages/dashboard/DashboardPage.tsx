@@ -65,7 +65,7 @@ const QUICK_ACTIONS = [
     iconColor: 'text-on-secondary-container',
     title: 'Add new Entry',
     sub: 'Populate your collections',
-    href: '/content-manager?create=true',
+    href: '/content-management?create=true',
   },
   // {
   //   icon: 'menu_book',
@@ -139,7 +139,7 @@ export function DashboardPage() {
             <div className="lg:col-span-2 bg-surface h-fit rounded-xl border border-outline-variant shadow-sm flex flex-col">
               <div className="p-lg border-b border-outline-variant flex items-center justify-between">
                 <h3 className="text-h3 font-h3 text-on-surface">Recent Collections</h3>
-                <button onClick={() => navigate('/content-manager')} className="text-primary text-label-md font-label-md hover:underline">
+                <button onClick={() => navigate('/content-management')} className="text-primary text-label-md font-label-md hover:underline">
                   View all
                 </button>
               </div>

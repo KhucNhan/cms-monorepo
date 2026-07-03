@@ -325,7 +325,7 @@ src/
 ├── hooks/             # useAuth, usePages, useContentEntries
 └── pages/
     ├── auth/          # LoginPage
-    └── content-manager/
+    └── content-management/
         ├── ContentManagerPage.tsx    # danh sách page
         ├── PageEditPage.tsx          # page editor chính
         ├── BlockPickerModal.tsx      # chọn block từ registry

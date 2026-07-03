@@ -23,37 +23,37 @@ function buildQuery(filters: ContentFilters): string {
 
 export const contentApi = {
   /**
-   * GET /api/content-manager/articles
+   * GET /api/content-management/articles
    * Hỗ trợ filter, sort, paginate qua query params
    */
   getEntries: (collectionType: string, filters: ContentFilters = {}) =>
     apiClient.get<PaginatedResponse<ContentEntry>>(
-      `/content-manager/${collectionType}${buildQuery(filters)}`,
+      `/content-management/${collectionType}${buildQuery(filters)}`,
     ),
 
   /**
-   * GET /api/content-manager/articles/:id
+   * GET /api/content-management/articles/:id
    */
   getEntry: (collectionType: string, id: string) =>
-    apiClient.get<ContentEntry>(`/content-manager/${collectionType}/${id}`),
+    apiClient.get<ContentEntry>(`/content-management/${collectionType}/${id}`),
 
   /**
-   * POST /api/content-manager/articles
+   * POST /api/content-management/articles
    */
   createEntry: (collectionType: string, data: Partial<ContentEntry>) =>
-    apiClient.post<ContentEntry>(`/content-manager/${collectionType}`, data),
+    apiClient.post<ContentEntry>(`/content-management/${collectionType}`, data),
 
   /**
-   * PUT /api/content-manager/articles/:id
+   * PUT /api/content-manamanagementger/articles/:id
    */
   updateEntry: (collectionType: string, id: string, data: Partial<ContentEntry>) =>
-    apiClient.put<ContentEntry>(`/content-manager/${collectionType}/${id}`, data),
+    apiClient.put<ContentEntry>(`/content-management/${collectionType}/${id}`, data),
 
   /**
-   * DELETE /api/content-manager/articles/:id
+   * DELETE /api/content-management/articles/:id
    */
   deleteEntry: (collectionType: string, id: string) =>
-    apiClient.delete<void>(`/content-manager/${collectionType}/${id}`),
+    apiClient.delete<void>(`/content-management/${collectionType}/${id}`),
 };
 
 // ─── Content Type Builder ─────────────────────────────────────────────────────

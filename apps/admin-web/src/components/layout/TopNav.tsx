@@ -47,7 +47,7 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
       )}
     >
       {/* Left */}
-      <div className="flex items-center gap-md !w-[275px] min-w-0">
+      <div className="flex items-center gap-md !w-[345px] min-w-0">
         <div className="flex items-center gap-sm flex-shrink-0">
           <button
             onClick={toggle}

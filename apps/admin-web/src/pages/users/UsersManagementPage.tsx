@@ -8,7 +8,7 @@ import { ApiClientError } from '@/api/client';
 import { UserFormModal } from './components/UserFormModal';
 import type { AdminUser } from '@/api/users.api';
 
-export function SettingsPage() {
+export function UsersManagementPage() {
   const { users, roles, loading, error, refetch, createUser, updateUser, deleteUser } = useUsers();
   const { toasts, addToast, removeToast } = useToast();
 

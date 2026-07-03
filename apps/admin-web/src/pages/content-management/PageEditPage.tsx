@@ -507,7 +507,7 @@ export function PageEditPage() {
   // ─── Render Loading / Error States ────────────────────────────────────────
   if (loading && blocks.length === 0) {
     return (
-      <AppLayout title="Content Manager" >
+      <AppLayout title="Content Management" >
         <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
           <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -521,11 +521,11 @@ export function PageEditPage() {
 
   if (error || !page) {
     return (
-      <AppLayout title="Content Manager" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
+      <AppLayout title="Content Management" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
         <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
           <span className="material-symbols-outlined text-[48px] text-error">error</span>
           <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
-          <Button variant="secondary" onClick={() => navigate('/content-manager')}>
+          <Button variant="secondary" onClick={() => navigate('/content-management')}>
             Back to Pages
           </Button>
         </div>
@@ -563,14 +563,14 @@ export function PageEditPage() {
 
   return (
     <AppLayout
-      title="Content Manager"
+      title="Content Management"
       // breadcrumb={{
         // label: 'Pages',
         // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
       // }}
       actions={
         <div className="flex items-center gap-sm">
-          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-manager')}>
+          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
             Back
           </Button>
           <Button

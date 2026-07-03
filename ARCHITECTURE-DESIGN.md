@@ -38,7 +38,7 @@
 
 ### 2. Quản lý phiên bản trang (Page Version Lifecycle)
 
-- **Loại bỏ Version Archive Manager riêng biệt**: Thay vì có một trang quản lý Archive riêng gây phân mảnh trải nghiệm, toàn bộ lịch sử phiên bản (DRAFT, PUBLISHED, ARCHIVED) được hợp nhất trực tiếp trong bảng điều khiển **History** của Content Manager.
+- **Loại bỏ Version Archive Manager riêng biệt**: Thay vì có một trang quản lý Archive riêng gây phân mảnh trải nghiệm, toàn bộ lịch sử phiên bản (DRAFT, PUBLISHED, ARCHIVED) được hợp nhất trực tiếp trong bảng điều khiển **History** của Content management.
 - **Sắp xếp ưu tiên trong Lịch sử**: DRAFT và PUBLISHED được xếp lên hàng đầu để người quản trị dễ dàng theo dõi trạng thái hiện tại. Các bản ARCHIVED cũ được sắp xếp theo thời gian mới nhất giảm dần ở phía dưới.
 - **Quy trình "Set as Draft" (thay thế nút Revert cũ)**:
   - Khi người dùng muốn khôi phục một bản ghi cũ (ARCHIVED), họ chọn phiên bản đó và nhấn **Set as Draft**.
