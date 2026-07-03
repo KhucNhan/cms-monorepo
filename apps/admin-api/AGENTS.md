@@ -31,6 +31,28 @@
 - Guard dùng chung `RolesGuard` + decorator `@RequirePermissions('resource:action')`
   (`modules/auth/guards/roles.guard.ts`) — check thẳng trên `JwtPayload.permissions: Permission[]`
   đã embed sẵn lúc login, **không query DB mỗi request**.
+- **Quy tắc bắt buộc: MỌI route trong MỌI controller phải có `@RequirePermissions`**, kể cả các
+  route `GET` (list/detail) trước đây hay bị bỏ sót — không có route "public" nào giữa các module
+  đã audit (`blocks`, `media`, `pages`, `page-versions`, `users`, `roles`). Khi thêm controller/route
+  mới, luôn tự hỏi "route này thuộc `resource:action` nào trong bảng dưới" trước khi merge, không
+  để route trần chỉ dựa vào `JwtAuthGuard` (xác thực) mà thiếu `RolesGuard` + permission (phân quyền).
+- **Rà soát gần nhất (đã vá các route thiếu permission)**:
+  - `GET /blocks` → `page:read` (trước đó thiếu, chỉ dựa vào JwtAuthGuard).
+  - `GET /pages`, `GET /pages/:idOrSlug` → `page:read` (trước đó thiếu).
+  - `GET /page-versions` (findDraft), `GET /page-versions/archived` → `page:read` (trước đó thiếu).
+  - `PATCH /media/:id/rename` → tạm dùng `media:create` (trước đó thiếu hoàn toàn permission).
+    **Đây là workaround, không phải thiết kế đúng** — `PermissionResource` cho `media` hiện chỉ có
+    `create | read | delete`, chưa có action `update`. Rename là hành động sửa (update), không phải
+    tạo mới, nên dùng tạm `media:create` sẽ gây hiểu nhầm quyền hạn (user có quyền `media:create`
+    nhưng không có quyền `media:read`/`delete` vẫn đổi được tên file — có thể không đúng ý đồ RBAC
+    gốc). Nếu task sau này cần rename tách quyền riêng với upload, phải: (1) thêm
+    `{ resource: 'media', action: 'update' }` vào `ALL_PERMISSIONS` trong `prisma/seed.ts`, (2) chạy
+    lại `pnpm --filter admin-api prisma:seed`, (3) đổi decorator ở `MediaController.rename` thành
+    `@RequirePermissions('media:update')`. Không tự ý làm việc này ngoài phạm vi task được giao.
+- `Permission` trong seed hiện tại (`prisma/seed.ts`, `ALL_PERMISSIONS`) chỉ có 16 permission —
+  không có `media:update` và không có `page:read`-riêng-cho-mỗi-route (dùng chung 1 permission
+  `page:read` cho mọi route đọc của cả `pages` lẫn `blocks` lẫn `page-versions`, vì cả 3 cùng thuộc
+  domain "xem nội dung trang").
 - Endpoint (`roles.controller.ts`, prefix thật `/api/v1/roles`):
   - `GET /roles` — `role:read` — list role kèm permissions + userCount.
   - `GET /roles/permissions/list` — `role:read` — list toàn bộ permission có thể gán (không phải
@@ -62,3 +84,6 @@ pnpm --filter admin-api prisma:seed      # ts-node chạy thẳng .ts, không qu
   root AGENTS.md mục 4 — chỉ thêm khi thực sự cần `migrate reset`.
 - Global prefix `/api/v1` áp dụng cho toàn bộ controller — khi test bằng Swagger/Postman, path
   luôn có tiền tố này (ví dụ `POST /api/v1/roles`, không phải `POST /roles`).
+- **`media:update` chưa tồn tại trong `PermissionResource`/seed** — xem mục RBAC phía trên,
+  `PATCH /media/:id/rename` đang tạm mượn `media:create`. Đây là gap cần dọn khi có task RBAC media
+  rõ ràng hơn.
