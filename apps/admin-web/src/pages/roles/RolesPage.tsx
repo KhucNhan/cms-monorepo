@@ -49,9 +49,9 @@ export function RolesPage() {
       const role = await createRole(newRoleName.trim());
       setNewRoleName('');
       selectRole(role);
-      addToast('Đã tạo role mới', 'success');
+      addToast('A new role has been created.', 'success');
     } catch (err) {
-      addToast(err instanceof ApiClientError ? err.message : 'Tạo role thất bại.', 'error');
+      addToast(err instanceof ApiClientError ? err.message : 'Creating a role failed.', 'error');
     }
   };
 
@@ -59,9 +59,9 @@ export function RolesPage() {
     if (!selectedRole || !renamingName.trim() || renamingName === selectedRole.name) return;
     try {
       await renameRole(selectedRole.id, renamingName.trim());
-      addToast('Đã đổi tên role', 'success');
+      addToast('The role name has been changed.', 'success');
     } catch (err) {
-      addToast(err instanceof ApiClientError ? err.message : 'Đổi tên thất bại.', 'error');
+      addToast(err instanceof ApiClientError ? err.message : 'The name change failed.', 'error');
     }
   };
 
@@ -70,9 +70,9 @@ export function RolesPage() {
     setSavingPerms(true);
     try {
       await setPermissions(selectedRole.id, Array.from(draftPermissionIds));
-      addToast(`Đã cập nhật quyền cho "${selectedRole.name}"`, 'success');
+      addToast(`Permissions for "${selectedRole.name}" have been updated.`, 'success');
     } catch (err) {
-      addToast(err instanceof ApiClientError ? err.message : 'Cập nhật quyền thất bại.', 'error');
+      addToast(err instanceof ApiClientError ? err.message : 'Update permission failed.', 'error');
     } finally {
       setSavingPerms(false);
     }
@@ -83,9 +83,9 @@ export function RolesPage() {
     try {
       await deleteRole(deleteId);
       if (selectedRoleId === deleteId) setSelectedRoleId(null);
-      addToast('Đã xoá role', 'info');
+      addToast('Role has been deleted.', 'info');
     } catch (err) {
-      addToast(err instanceof ApiClientError ? err.message : 'Xoá role thất bại.', 'error');
+      addToast(err instanceof ApiClientError ? err.message : 'Delete role failed.', 'error');
     } finally {
       setDeleteId(null);
     }
@@ -104,12 +104,12 @@ export function RolesPage() {
       <div className="p-xl grid grid-cols-[280px_1fr] gap-xl">
         {/* Cột trái: danh sách role */}
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-md h-fit">
-          <h3 className="text-label-md font-label-md text-on-surface-variant uppercase mb-md">Roles</h3>
+          <h3 className={!canManage ? 'text-h3 font-h3 text-on-background capitalize mb-[8px]' : 'text-h3 font-h3 text-on-background capitalize mb-[24px]'}>Roles</h3>
 
-          {loading && <p className="text-body-md text-on-surface-variant">Đang tải…</p>}
+          {loading && <p className="text-body-md text-on-surface-variant">Loading...</p>}
           {error && (
             <div className="text-body-md text-error mb-sm">
-              {error} <button onClick={refetch} className="underline">Thử lại</button>
+              {error} <button onClick={refetch} className="underline">Try again</button>
             </div>
           )}
 
@@ -143,7 +143,7 @@ export function RolesPage() {
               <Input
                 value={newRoleName}
                 onChange={(e) => setNewRoleName(e.target.value)}
-                placeholder="Tên role mới"
+                placeholder="New role name"
               />
               <Button variant="ghost" icon="add" onClick={handleCreateRole} />
             </div>
@@ -151,43 +151,26 @@ export function RolesPage() {
         </div>
 
         {/* Cột phải: chi tiết + ma trận permission */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-xl">
-          {!selectedRole && (
-            <div className="flex flex-col items-center justify-center text-on-surface-variant p-xl">
-              <span className="material-symbols-outlined text-[48px] mb-md">shield</span>
-              Chọn một role bên trái để xem hoặc cấp quyền.
-            </div>
-          )}
-
+        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-xl pt-md">
           {selectedRole && (
             <>
-              <div className="flex items-center gap-md mb-lg">
-                {canManage ? (
-                  <>
-                    <Input
-                      value={renamingName}
-                      onChange={(e) => setRenamingName(e.target.value)}
-                      className="max-w-xs"
-                    />
-                    <Button variant="ghost" size="sm" onClick={handleRename} disabled={renamingName === selectedRole.name}>
-                      Lưu tên
-                    </Button>
-                  </>
-                ) : (
-                  <h2 className="text-h3 font-h3 text-on-background capitalize">{selectedRole.name}</h2>
-                )}
+              <div className={!canManage ? 'flex flex-col items-start' : 'flex flex-row mb-[16px]'}>
+                <div className={!canManage ? 'mb-md' : ''}>
+                  <h3 className="text-h3 h-full content-center font-h3 text-on-background capitalize"> {selectedRole ? `${selectedRole.name} Permissions` : 'Permissions'} </h3>
+                
+                  {!canManage && (
+                    <span className="text-body-md text-on-surface-variant">
+                      You only have viewing rights. Only administrators can grant/revoke permissions.
+                    </span>
+                  )}
+                </div>
+                
                 {canManage && (
                   <Button variant="primary" size="sm" className="ml-auto" onClick={handleSavePermissions} disabled={savingPerms}>
-                    {savingPerms ? 'Đang lưu…' : 'Lưu quyền'}
+                    {savingPerms ? 'Saving…' : 'Save Permissions'}
                   </Button>
                 )}
               </div>
-
-              {!canManage && (
-                <p className="text-body-md text-on-surface-variant mb-lg">
-                  Bạn chỉ có quyền xem. Chỉ admin mới có thể cấp/thu hồi quyền.
-                </p>
-              )}
 
               <div className="grid grid-cols-2 gap-lg">
                 {Object.entries(groupedPermissions).map(([resource, perms]) => (
@@ -216,19 +199,26 @@ export function RolesPage() {
               </div>
             </>
           )}
+        
+          {!selectedRole && (
+            <div className="flex flex-col items-center justify-center text-on-surface-variant p-xl">
+              <span className="material-symbols-outlined text-[48px] mb-md">shield</span>
+              Select a role on the left to view or grant permissions.
+            </div>
+          )}
         </div>
       </div>
 
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-surface rounded-xl p-xl shadow-2xl border border-outline-variant w-full max-w-sm mx-md">
-            <h3 className="text-h3 font-h3 text-on-surface mb-md">Xoá role?</h3>
+            <h3 className="text-h3 font-h3 text-on-surface mb-md">Delete role?</h3>
             <p className="text-body-md text-on-surface-variant mb-xl">
-              Hành động này không thể hoàn tác. Role đang được gán cho user sẽ không xoá được.
+              This action cannot be undone. The role assigned to the user cannot be deleted.
             </p>
             <div className="flex gap-md justify-end">
-              <Button variant="ghost" onClick={() => setDeleteId(null)}>Huỷ</Button>
-              <Button variant="danger" onClick={handleDelete}>Xoá</Button>
+              <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>
+              <Button variant="danger" onClick={handleDelete}>Delete</Button>
             </div>
           </div>
         </div>
