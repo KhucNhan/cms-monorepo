@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { usePages } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-management/components/CreatePageModal';
+import { Can } from '@/components/Can';
 import type { Page, VersionStatus } from '@/types';
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -64,9 +65,11 @@ export function ContentManagementPage() {
             value={search}
             onChange={setSearch}
           />
-          <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
-            New Page
-          </Button>
+          <Can permission="page:create">
+            <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
+              New Page
+            </Button>
+          </Can>
         </>
       }
     >
@@ -277,16 +280,18 @@ function PageRow({
       {/* Actions */}
       <td className="p-md text-right">
         <div className="flex items-center justify-end gap-xs">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
-            title="Delete page"
-          >
-            <span className="material-symbols-outlined text-[20px]">delete</span>
-          </button>
+          <Can permission="page:delete">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
+              title="Delete page"
+            >
+              <span className="material-symbols-outlined text-[20px]">delete</span>
+            </button>
+          </Can>
         </div>
       </td>
     </tr>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent, useRef } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/context/AuthContext';
 import { Input } from '@/components/ui/Input';
 
 export function LoginPage() {

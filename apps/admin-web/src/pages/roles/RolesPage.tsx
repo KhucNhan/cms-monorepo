@@ -4,20 +4,17 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useRoles } from '@/hooks/useRoles';
-import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ApiClientError } from '@/api/client';
 import type { Role } from '@/api/roles.api';
 
 export function RolesPage() {
   const { roles, allPermissions, loading, error, refetch, createRole, renameRole, setPermissions, deleteRole } = useRoles();
-  const { user } = useAuth();
+  const { can } = usePermissions();
   const { toasts, addToast, removeToast } = useToast();
 
-  // Backend embed permissions dạng "resource:action" string trong JWT (JwtPayload.permissions)
-  const canManage = useMemo(
-    () => user?.permissions?.includes('role:update') ?? false,
-    [user],
-  );
+  // Centralized check, same "resource:action" string used by backend @RequirePermissions
+  const canManage = can('role:update');
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [draftPermissionIds, setDraftPermissionIds] = useState<Set<string>>(new Set());

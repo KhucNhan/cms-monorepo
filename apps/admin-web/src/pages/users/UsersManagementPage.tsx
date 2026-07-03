@@ -6,6 +6,8 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useUsers } from '@/hooks/useUsers';
 import { ApiClientError } from '@/api/client';
 import { UserFormModal } from './components/UserFormModal';
+import { Can } from '@/components/Can';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { AdminUser } from '@/api/users.api';
 
 const PAGE_SIZE = 10;
@@ -13,6 +15,8 @@ const PAGE_SIZE = 10;
 export function UsersManagementPage() {
   const { users, roles, loading, error, refetch, createUser, updateUser, deleteUser } = useUsers();
   const { toasts, addToast, removeToast } = useToast();
+  const { can } = usePermissions();
+  const canUpdateUser = can('user:update');
 
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState('');
@@ -102,9 +106,11 @@ export function UsersManagementPage() {
             value={search}
             onChange={setSearch}
           />
-          <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
-            New User
-          </Button>
+          <Can permission="user:create">
+            <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
+              New User
+            </Button>
+          </Can>
         </>
       }
     >
@@ -178,8 +184,10 @@ export function UsersManagementPage() {
                       return (
                         <tr
                           key={user.id}
-                          onClick={() => setEditUser(user)}
-                          className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                          onClick={canUpdateUser ? () => setEditUser(user) : undefined}
+                          className={`transition-colors group ${
+                            canUpdateUser ? 'hover:bg-primary/5 cursor-pointer' : 'cursor-default'
+                          }`}
                         >
                           <td className="p-md">
                             <div className="flex items-center gap-sm">
@@ -197,16 +205,18 @@ export function UsersManagementPage() {
                           </td>
                           <td className="p-md text-right">
                             <div className="flex items-center justify-end gap-xs">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteId(user.id);
-                                }}
-                                className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                                title="Delete user"
-                              >
-                                <span className="material-symbols-outlined text-[20px]">delete</span>
-                              </button>
+                              <Can permission="user:delete">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteId(user.id);
+                                  }}
+                                  className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all"
+                                  title="Delete user"
+                                >
+                                  <span className="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                              </Can>
                             </div>
                           </td>
                         </tr>

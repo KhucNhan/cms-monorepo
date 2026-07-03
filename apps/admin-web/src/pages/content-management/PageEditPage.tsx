@@ -11,6 +11,7 @@ import { ApiClientError } from '@/api/client';
 import { BlockPickerModal } from './BlockPickerModal';
 import { BlockSectionCard } from './components/BlockSectionCard';
 import { UnsavedChangesModal } from './components/UnsavedChangesModal';
+import { Can } from '@/components/Can';
 import type { PageDetail, Block, PageVersion } from '@/types';
 
 export function PageEditPage() {
@@ -590,24 +591,28 @@ export function PageEditPage() {
               Revert to Published
             </Button>
           )}
-          <Button
-            variant="secondary"
-            icon="save"
-            onClick={handleSave}
-            disabled={!isDirty || saving || publishing}
-            loading={saving}
-          >
-            Save Draft
-          </Button>
-          <Button
-            variant="primary"
-            icon="publish"
-            onClick={handlePublish}
-            disabled={saving || publishing || (!isDraftStatus && !isDirty)}
-            loading={publishing}
-          >
-            Publish Live
-          </Button>
+          <Can permission="page:update">
+            <Button
+              variant="secondary"
+              icon="save"
+              onClick={handleSave}
+              disabled={!isDirty || saving || publishing}
+              loading={saving}
+            >
+              Save Draft
+            </Button>
+          </Can>
+          <Can permission="page:publish">
+            <Button
+              variant="primary"
+              icon="publish"
+              onClick={handlePublish}
+              disabled={saving || publishing || (!isDraftStatus && !isDirty)}
+              loading={publishing}
+            >
+              Publish Live
+            </Button>
+          </Can>
         </div>
       }
     >
@@ -635,14 +640,16 @@ export function PageEditPage() {
               </p>
             </div>
             
-            <Button
-              variant="primary"
-              icon="add_box"
-              size="md"
-              onClick={() => setShowPicker(true)}
-            >
-              Add Block
-            </Button>
+            <Can permission="page:update">
+              <Button
+                variant="primary"
+                icon="add_box"
+                size="md"
+                onClick={() => setShowPicker(true)}
+              >
+                Add Block
+              </Button>
+            </Can>
           </div>
 
           {/* Page Info: slug + SEO title/description */}
@@ -861,24 +868,28 @@ export function PageEditPage() {
                   </div>
                   <div className="flex items-center gap-xs flex-shrink-0">
                     {canSetAsDraft && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleRevertClick(v)}
-                        disabled={isReverting || isDeletingVersion}
-                      >
-                        Set as Draft
-                      </Button>
+                      <Can permission="page:update">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleRevertClick(v)}
+                          disabled={isReverting || isDeletingVersion}
+                        >
+                          Set as Draft
+                        </Button>
+                      </Can>
                     )}
                     {canDelete && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="delete"
-                        onClick={() => handleDeleteVersionClick(v)}
-                        disabled={isReverting || isDeletingVersion}
-                        aria-label="Delete version"
-                      />
+                      <Can permission="page:delete">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon="delete"
+                          onClick={() => handleDeleteVersionClick(v)}
+                          disabled={isReverting || isDeletingVersion}
+                          aria-label="Delete version"
+                        />
+                      </Can>
                     )}
                   </div>
                 </div>
