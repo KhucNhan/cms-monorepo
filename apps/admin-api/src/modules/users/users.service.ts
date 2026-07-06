@@ -52,8 +52,35 @@ const USER_SELECT = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(requesterId: string) {
+    const requester = await this.prisma.user.findUnique({
+      where: { id: requesterId },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!requester) {
+      throw new NotFoundException();
+    }
+
+    // ADMIN thấy tất cả
+    if (requester.role.name.toLocaleLowerCase() === 'admin') {
+      return this.prisma.user.findMany({
+        select: USER_SELECT,
+        orderBy: { email: 'asc' },
+      });
+    }
+
+    // EDITOR không thấy ADMIN
     return this.prisma.user.findMany({
+      where: {
+        role: {
+          name: {
+            not: 'admin',
+          },
+        },
+      },
       select: USER_SELECT,
       orderBy: { email: 'asc' },
     });

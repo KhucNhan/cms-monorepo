@@ -10,7 +10,7 @@ import { Can } from '@/components/Can';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { AdminUser } from '@/api/users.api';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 
 export function UsersManagementPage() {
   const { users, roles, loading, error, refetch, createUser, updateUser, deleteUser } = useUsers();
@@ -23,23 +23,57 @@ export function UsersManagementPage() {
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  // null = mặc định (dữ liệu mới nhất lên đầu, tức đảo ngược thứ tự gốc trả về từ API)
+  const [sortField, setSortField] = useState<'email' | 'role' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSortClick = (field: 'email' | 'role') => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      // Bấm lần 3: quay về mặc định (mới nhất lên đầu)
+      setSortField(null);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter((user) =>
-      user.email.toLowerCase().includes(term) ||
-      user.role.name.toLowerCase().includes(term),
-    );
-  }, [search, users]);
+    return users.filter((user) => {
+      const matchesSearch =
+        !term ||
+        user.email.toLowerCase().includes(term) ||
+        user.role.name.toLowerCase().includes(term);
+
+      const matchesRole = roleFilter === 'all' || user.roleId === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [search, users, roleFilter]);
+
+  const sortedUsers = useMemo(() => {
+    if (!sortField) {
+      // Mặc định: đảo ngược thứ tự trả về từ API (email asc) → dữ liệu mới nhất lên đầu
+      return [...filteredUsers].reverse();
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filteredUsers].sort((a, b) => {
+      const av = sortField === 'email' ? a.email : a.role.name;
+      const bv = sortField === 'email' ? b.email : b.role.name;
+      return av.localeCompare(bv) * dir;
+    });
+  }, [filteredUsers, sortField, sortDir]);
 
   const total = filteredUsers.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // Reset về trang 1 khi search thay đổi
+  // Reset về trang 1 khi search / role filter thay đổi
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, roleFilter]);
 
   // Đảm bảo page không vượt quá totalPages (vd sau khi xoá user ở trang cuối)
   useEffect(() => {
@@ -48,8 +82,8 @@ export function UsersManagementPage() {
 
   const paginatedUsers = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return filteredUsers.slice(start, start + PAGE_SIZE);
-  }, [filteredUsers, page]);
+    return sortedUsers.slice(start, start + PAGE_SIZE);
+  }, [sortedUsers, page]);
 
   const handleCreate = async (payload: { email?: string; password?: string; roleId?: string }) => {
     try {
@@ -106,6 +140,19 @@ export function UsersManagementPage() {
             value={search}
             onChange={setSearch}
           />
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="h-9 px-sm rounded-lg border border-outline-variant bg-surface-container-lowest text-body-md text-on-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+            title="Filter by role"
+          >
+            <option value="all">All roles</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
           <Can permission="user:create">
             <Button variant="primary" icon="person_add" size="md" onClick={() => setShowCreate(true)}>
               New User
@@ -116,7 +163,7 @@ export function UsersManagementPage() {
     >
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto">
-          <div className="flex items-center justify-between mb-xl">
+          {/* <div className="flex items-center justify-between mb-xl">
             <div>
               <h1 className="text-h1 font-h1 text-on-background">User Management</h1>
               <p className="text-body-md text-on-surface-variant mt-xs">
@@ -130,7 +177,7 @@ export function UsersManagementPage() {
               <span className="material-symbols-outlined text-[18px]">refresh</span>
               Refresh
             </button>
-          </div>
+          </div> */}
 
           {loading && (
             <div className="flex items-center justify-center p-xl text-on-surface-variant gap-sm">
@@ -155,11 +202,25 @@ export function UsersManagementPage() {
               <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">group</span>
               <h3 className="text-h3 font-h3 text-on-background">No users found</h3>
               <p className="text-body-md text-on-surface-variant max-w-sm mb-lg mt-sm">
-                Create the first user account for your team.
+                {search || roleFilter !== 'all'
+                  ? 'Try adjusting your search or role filter.'
+                  : 'Create the first user account for your team.'}
               </p>
-              <Button variant="primary" icon="person_add" onClick={() => setShowCreate(true)}>
-                Create User
-              </Button>
+              {(search || roleFilter !== 'all') ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearch('');
+                    setRoleFilter('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="primary" icon="person_add" onClick={() => setShowCreate(true)}>
+                  Create User
+                </Button>
+              )}
             </div>
           )}
 
@@ -174,7 +235,29 @@ export function UsersManagementPage() {
                           key={h}
                           className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
                         >
-                          {h}
+                          {h === 'Email' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSortClick('email')}
+                              className="flex items-center gap-[2px] uppercase tracking-wider hover:text-on-background transition-colors"
+                              title="Click để sắp xếp theo Email"
+                            >
+                              <span>{h}</span>
+                              <SortArrow active={sortField === 'email'} dir={sortDir} />
+                            </button>
+                          ) : h === 'Role' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSortClick('role')}
+                              className="flex items-center gap-[2px] uppercase tracking-wider hover:text-on-background transition-colors"
+                              title="Click để sắp xếp theo Role"
+                            >
+                              <span>{h}</span>
+                              <SortArrow active={sortField === 'role'} dir={sortDir} />
+                            </button>
+                          ) : (
+                            h
+                          )}
                         </th>
                       ))}
                     </tr>
@@ -185,25 +268,24 @@ export function UsersManagementPage() {
                         <tr
                           key={user.id}
                           onClick={canUpdateUser ? () => setEditUser(user) : undefined}
-                          className={`transition-colors group ${
+                          className={`transition-colors group h-[74.133px] ${
                             canUpdateUser ? 'hover:bg-primary/5 cursor-pointer' : 'cursor-default'
                           }`}
                         >
-                          <td className="p-md">
+                          <td className="p-[8px]">
                             <div className="flex items-center gap-sm">
                               <span className="material-symbols-outlined text-on-surface-variant text-[18px]">person</span>
                               <div>
                                 <p className="text-[14px] font-semibold text-on-background">{user.email}</p>
-                                <p className="text-[11px] text-on-surface-variant font-mono">{user.id.slice(0, 8)}…</p>
                               </div>
                             </div>
                           </td>
-                          <td className="p-md">
+                          <td className="p-[8px]">
                             <span className="inline-flex items-center gap-xs px-sm py-1 rounded-full text-label-md font-label-md bg-primary/10 text-primary capitalize">
                               {user.role.name}
                             </span>
                           </td>
-                          <td className="p-md text-right">
+                          <td className="p-[8px] text-right">
                             <div className="flex items-center justify-end gap-xs">
                               <Can permission="user:delete">
                                 <button
@@ -302,6 +384,18 @@ function getPageNumbers(page: number, totalPages: number): number[] {
   const end = Math.min(totalPages, start + maxButtons - 1);
   start = Math.max(1, end - maxButtons + 1);
   return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+}
+
+function SortArrow({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  return (
+    <span
+      className={`material-symbols-outlined text-[14px] transition-transform ${
+        active ? 'text-primary' : 'text-outline-variant'
+      } ${active && dir === 'desc' ? 'rotate-180' : ''}`}
+    >
+      arrow_upward
+    </span>
+  );
 }
 
 function PaginationButton({
