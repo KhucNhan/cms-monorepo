@@ -138,6 +138,12 @@ model Media {
   url      String
   key      String  @unique   // object key trên S3/R2/local
   mimeType String
+
+  detailKey String?
+  detailUrl String?
+  thumbKey  String?
+  thumbUrl  String?
+
   width    Int?
   height   Int?
 

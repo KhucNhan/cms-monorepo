@@ -347,9 +347,16 @@ function MediaCard({
       {/* Thumbnail */}
       <div className="aspect-square bg-surface-container flex items-center justify-center p-sm">
         {isSvg ? (
-          <img src={item.url} alt={fileName} className="max-w-full max-h-full object-contain" />
+          <img src={item.url} alt={fileName} loading="lazy" className="max-w-full max-h-full object-contain" />
         ) : (
-          <img src={item.url} alt={fileName} className="w-full h-full object-cover" />
+          // Grid dùng thumbUrl (≤300KB, đã resize nhỏ) thay vì url gốc để giảm băng thông.
+          // Fallback về url gốc cho record cũ chưa có thumb (trước khi có tính năng tối ưu này).
+          <img
+            src={item.thumbUrl ?? item.url}
+            alt={fileName}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
         )}
       </div>
 

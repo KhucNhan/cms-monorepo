@@ -15,8 +15,38 @@
 - **Không render HTML** — chỉ trả JSON. Task "làm block đẹp hơn" không thuộc app này.
 - **Publish** = update `pages.publishedVersionId`, không UPDATE trực tiếp version đang published.
 - **Media Check Usages**: `MediaService.findUsages()` quét đệ quy mọi block trong cơ sở dữ liệu để tìm `mediaId` bên trong JSONB `data` bất kể trạng thái `pageVersion.status` (DRAFT/PUBLISHED/ARCHIVED). Khi thêm các trường lưu trữ media mới, luôn đặt key là `mediaId` để cơ chế tự động quét phát hiện.
+  - **Known perf gap chưa xử lý**: hàm này vẫn load toàn bộ block trong DB (`findMany` không `where`)
+    rồi lọc bằng JS đệ quy — nặng dần theo số lượng block. Task tối ưu sau này nên chuyển sang
+    Postgres JSONB query (`data @> ...`) để lọc ngay ở DB.
 - **Revert to Archived (Set as Draft)**: Endpoint `POST /page-versions/:id/revert` thực hiện xóa DRAFT hiện tại nếu có (cascade blocks) và clone version ARCHIVED đó thành DRAFT mới.
 - **Update SEO Meta**: Endpoint `PATCH /page-versions/:id/seo-meta` dùng để update metadata SEO (`title`, `description`) trên các bản DRAFT/ARCHIVED (PUBLISHED bị chặn không được sửa trực tiếp).
+
+## Media Optimization (mới — sinh 3 variant ảnh khi upload)
+
+- Dùng thư viện **`sharp`** (free, native binding libvips, không cần license/API key) —
+  `apps/admin-api/src/modules/media/image-optimizer.util.ts`.
+- Mỗi ảnh raster upload (không áp dụng cho SVG — SVG là vector, bỏ qua toàn bộ pipeline này) sẽ
+  sinh **3 variant**, đều convert sang **WebP** và **strip metadata** (EXIF/GPS/camera info — mặc
+  định của `sharp` khi KHÔNG gọi `.withMetadata()`, không cần code riêng để strip):
+  - **`original`**: cap `maxDimension: 2560`, quality khởi điểm 90, **KHÔNG ép `targetBytes`** —
+    ghi đè trực tiếp lên file gốc vừa upload (file thô upload ban đầu **không được giữ lại**, đã
+    quyết định đánh đổi để tiết kiệm dung lượng disk).
+  - **`detail`**: cap `maxDimension: 1600`, **ép ≤300KB** (`targetBytes: 300 * 1024`) — dự kiến dùng
+    cho canvas preview Page Editor, nhưng **CHƯA nối vào FE nào** (field `detailKey`/`detailUrl` đã
+    có trong DB, đang chờ task nối UI).
+  - **`thumb`**: cap `maxDimension: 400`, ép ≤300KB — dùng cho grid Media Library
+    (`admin-web/src/pages/media-library/MediaLibraryPage.tsx`).
+- Thuật toán ép `targetBytes` trong `optimizeImage()`: lặp giảm `quality` trước (bước 12, sàn 40),
+  hết dư địa quality mới giảm tiếp `maxDimension` (hệ số 0.85), tối đa `MAX_ITERATIONS = 8` vòng để
+  tránh loop vô hạn — ưu tiên giữ resolution hơn là giảm quality quá tay.
+- `rotateDeg`/`crop` đã có sẵn tham số trong `optimizeImage()` nhưng **CHƯA có endpoint/UI gọi tới**
+  — mới dừng ở mức utility function, chưa phải tính năng hoàn chỉnh cho user.
+- **Prisma `Media` model** đã thêm 4 field mới (nullable, vì SVG và record cũ trước khi có tính
+  năng này sẽ không có): `detailKey`, `detailUrl`, `thumbKey`, `thumbUrl`. Field `width`/`height` là
+  field có sẵn từ đầu, không liên quan tới đợt thêm này.
+- **`rename()`/`delete()` đã đồng bộ cho cả 3 file variant** — đổi tên/xóa `key` gốc thì cũng đổi
+  tên/xóa `detailKey`/`thumbKey` tương ứng trên disk, không để rác file variant mồ côi.
+- Cài đặt: `pnpm --filter admin-api add sharp` (đã thêm vào `package.json`).
 
 ## RBAC — Roles & Permissions (`modules/roles/`)
 
@@ -76,6 +106,13 @@ pnpm --filter admin-api prisma:migrate
 pnpm --filter admin-api prisma:seed      # ts-node chạy thẳng .ts, không qua build
 ```
 
+**Lưu ý tên script**: root `package.json` có script `db:migrate`/`db:generate` gọi
+`pnpm --filter admin-api prisma migrate dev` / `prisma generate` — đây là tên script SAI, vì
+`admin-api/package.json` đặt tên là `prisma:migrate`/`prisma:generate` (có dấu `:`), không phải
+`prisma`. Nếu chạy `pnpm db:migrate` từ root mà gặp lỗi "None of the selected packages has a
+'prisma' script", đây là nguyên nhân — hoặc sửa lại script root, hoặc luôn gọi trực tiếp
+`pnpm --filter admin-api prisma:migrate`.
+
 ## Known gap tại chỗ
 
 - `package.json` **không có** field `"prisma": { "seed": "..." }` — chỉ cần thiết nếu dùng
@@ -87,3 +124,6 @@ pnpm --filter admin-api prisma:seed      # ts-node chạy thẳng .ts, không qu
 - **`media:update` chưa tồn tại trong `PermissionResource`/seed** — xem mục RBAC phía trên,
   `PATCH /media/:id/rename` đang tạm mượn `media:create`. Đây là gap cần dọn khi có task RBAC media
   rõ ràng hơn.
+- **`detailUrl` chưa được nối vào bất kỳ UI/consumer nào** — field đã tồn tại trong DB và được sinh
+  ra lúc upload, nhưng chưa có chỗ nào (canvas preview, block editor...) thực sự dùng tới. Không
+  phải bug nếu gặp task liên quan tới preview ảnh medium-size.
