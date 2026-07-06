@@ -25,6 +25,14 @@
   - Grid phân trang `PAGE_SIZE = 12` (2 dòng, mỗi dòng 6 ảnh).
   - Tên ảnh cho phép nhấp đúp/chỉnh sửa trực tiếp (Inline Rename).
   - Khi xóa ảnh, hệ thống gọi API check usage (`mediaService.getUsages`) quét đệ quy thuộc tính `mediaId` ở mọi block của mọi `pageVersion` (không quan trọng status là gì) và bắt buộc đưa ra cảnh báo chi tiết trước khi xóa.
+  - **Media Optimization (mới)**: mỗi ảnh raster upload (trừ SVG) được BE sinh sẵn 3 biến thể WebP
+    ≤300KB — `original`, `detail`, `thumb` (xem chi tiết thuật toán ở `apps/admin-api/AGENTS.md`
+    mục "Media Optimization"). Grid trong `MediaLibraryPage.tsx` render `<img src={item.thumbUrl ??
+    item.url} loading="lazy" />` — ưu tiên `thumbUrl`, fallback về `url` gốc cho record cũ (upload
+    trước khi có tính năng này, `thumbUrl` sẽ là `null`). Nút xem chi tiết/"mở tab mới" vẫn dùng
+    `url` gốc (cũng đã được tối ưu ≤300KB, không phải file thô upload nữa).
+  - `detailUrl`/`detailKey` đã có trong response `MediaItem` nhưng **chưa được dùng ở component
+    nào** trong app này — dự kiến dùng cho canvas preview Page Editor sau này, chưa làm.
 - **Edit Slug & SEO Metadata**: Cho phép sửa trực tiếp `slug`, `SEO Title`, `SEO Description` ngay trên giao diện chỉnh sửa trang. Các thay đổi này chỉ lưu vào bản DRAFT hiện tại (hoặc fork ra DRAFT mới nếu đang xem bản PUBLISHED) khi bấm **Save Draft**.
 - **Roles & Permissions Page** (`pages/roles/RolesPage.tsx`):
   - Layout 2 cột: danh sách role bên trái (kèm số lượng user đang gán), ma trận permission

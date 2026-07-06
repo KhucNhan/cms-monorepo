@@ -85,6 +85,11 @@ export interface Media {
     mimeType: string;
     width: number | null;
     height: number | null;
+    // ── Mới: variant đã tối ưu (webp, ≤300KB) — null nếu record cũ chưa có hoặc là SVG ──
+    detailKey: string | null;
+    detailUrl: string | null;
+    thumbKey: string | null;
+    thumbUrl: string | null;
 }
 export interface AuthTokens {
     accessToken: string;

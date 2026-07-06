@@ -42,6 +42,11 @@ export class MediaInUseError extends ApiClientError {
   }
 }
 
+// NOTE: MediaItem (import từ '@/types') cần bổ sung 4 field optional sau,
+// khớp với 4 field mới ở Prisma `Media` model (null với record cũ / SVG):
+//   detailKey?: string | null; detailUrl?: string | null;
+//   thumbKey?: string | null;  thumbUrl?: string | null;
+
 const authHeaders = (extra?: Record<string, string>) => ({
   ...(tokenStorage.get() ? { Authorization: `Bearer ${tokenStorage.get()}` } : {}),
   ...extra,

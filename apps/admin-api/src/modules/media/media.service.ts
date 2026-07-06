@@ -5,13 +5,14 @@ import {
   ConflictException
 } from '@nestjs/common';
 import { z } from 'zod';
-import { createWriteStream, existsSync, mkdirSync, unlinkSync, renameSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, unlinkSync, renameSync, readFileSync, writeFileSync } from 'fs';
 import { join, extname, basename } from 'path';
 import { pipeline } from 'stream/promises';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
 import { getBlockDefinition } from '@cms/block-registry/schema-only';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { optimizeImage, isRasterImage, MEDIA_VARIANT_PRESETS } from './image-optimizer.util';
 
 export const listMediaSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -107,8 +108,6 @@ export class MediaService {
     }
 
     const ext = extname(file.filename) || this.extFromMime(file.mimetype);
-    // Dùng tên file gốc (đã sanitize) làm key thay vì randomUUID, để Media Library
-    // hiển thị đúng tên người dùng upload. Trùng tên -> tự thêm hậu tố -1, -2...
     const key = await this.generateUniqueKey(file.filename, ext);
     const filePath = join(this.uploadDir, key);
 
@@ -125,18 +124,63 @@ export class MediaService {
 
     const url = `/uploads/${key}`;
 
+    // ── Sinh 3 variant (original/detail/thumb) — bỏ qua nếu là SVG (vector, giữ nguyên) ──
+    const variants = await this.generateVariants(filePath, key, file.mimetype);
+
     return this.prisma.media.create({
       data: {
         key,
         url,
         mimeType: file.mimetype,
+        ...variants,
       },
     });
   }
 
   /**
+   * Sinh 3 file webp (original/detail/thumb) từ ảnh raster vừa upload, ghi ra disk cạnh file gốc
+   * (naming: `<base>.original.webp`, `<base>.detail.webp`, `<base>.thumb.webp`), trả về object
+   * để merge trực tiếp vào Prisma `create`/`update`.
+   *
+   * Với SVG: trả object rỗng (giữ 4 field null trong DB) vì SVG là vector, không cần variant.
+   */
+  private async generateVariants(
+    sourceFilePath: string,
+    key: string,
+    mimeType: string,
+  ): Promise<{ detailKey?: string; detailUrl?: string; thumbKey?: string; thumbUrl?: string }> {
+    if (!isRasterImage(mimeType)) return {};
+
+    const base = key.replace(extname(key), '');
+    const input = readFileSync(sourceFilePath);
+
+    const [detail, thumb] = await Promise.all([
+      optimizeImage(input, MEDIA_VARIANT_PRESETS.detail),
+      optimizeImage(input, MEDIA_VARIANT_PRESETS.thumb),
+    ]);
+
+    const detailKey = `${base}.detail.webp`;
+    const thumbKey = `${base}.thumb.webp`;
+    writeFileSync(join(this.uploadDir, detailKey), detail.buffer);
+    writeFileSync(join(this.uploadDir, thumbKey), thumb.buffer);
+
+    // Variant "original": cũng convert sang WebP + strip metadata (không ép targetBytes),
+    // GHI ĐÈ lên chính file gốc để tiết kiệm dung lượng disk (đã thống nhất: original cũng
+    // được tối ưu, không giữ file upload thô 100%).
+    const original = await optimizeImage(input, MEDIA_VARIANT_PRESETS.original);
+    writeFileSync(sourceFilePath, original.buffer);
+
+    return {
+      detailKey,
+      detailUrl: `/uploads/${detailKey}`,
+      thumbKey,
+      thumbUrl: `/uploads/${thumbKey}`,
+    };
+  }
+
+  /**
    * Đổi tên hiển thị của media (đồng thời đổi tên file vật lý trên disk và `key`/`url` trong DB).
-   * Giữ nguyên phần extension gốc, chỉ đổi phần base name; input đã qua renameMediaSchema.
+   * Đồng bộ đổi tên luôn 2 file variant (detail/thumb) nếu có, giữ nguyên hậu tố `.detail.webp`/`.thumb.webp`.
    */
   async rename(id: string, newNameRaw: string) {
     const media = await this.findOne(id);
@@ -156,16 +200,32 @@ export class MediaService {
       return media;
     }
 
-    const oldPath = join(this.uploadDir, media.key);
-    const newPath = join(this.uploadDir, newKey);
-    if (existsSync(oldPath)) {
-      renameSync(oldPath, newPath);
+    const oldBase = media.key.replace(ext, '');
+    const newBase = newKey.replace(ext, '');
+
+    this.renamePhysicalFile(media.key, newKey);
+    const data: Record<string, string> = { key: newKey, url: `/uploads/${newKey}` };
+
+    if (media.detailKey) {
+      const newDetailKey = media.detailKey.replace(oldBase, newBase);
+      this.renamePhysicalFile(media.detailKey, newDetailKey);
+      data.detailKey = newDetailKey;
+      data.detailUrl = `/uploads/${newDetailKey}`;
+    }
+    if (media.thumbKey) {
+      const newThumbKey = media.thumbKey.replace(oldBase, newBase);
+      this.renamePhysicalFile(media.thumbKey, newThumbKey);
+      data.thumbKey = newThumbKey;
+      data.thumbUrl = `/uploads/${newThumbKey}`;
     }
 
-    return this.prisma.media.update({
-      where: { id },
-      data: { key: newKey, url: `/uploads/${newKey}` },
-    });
+    return this.prisma.media.update({ where: { id }, data });
+  }
+
+  private renamePhysicalFile(oldKey: string, newKey: string) {
+    const oldPath = join(this.uploadDir, oldKey);
+    const newPath = join(this.uploadDir, newKey);
+    if (existsSync(oldPath)) renameSync(oldPath, newPath);
   }
 
   async getUsages(id: string): Promise<MediaUsageInfo[]> {
@@ -185,7 +245,13 @@ export class MediaService {
       });
     }
 
-    const filePath = join(this.uploadDir, media.key);
+    const deleteAllVariantFiles = () => {
+      for (const k of [media.key, media.detailKey, media.thumbKey]) {
+        if (!k) continue;
+        const p = join(this.uploadDir, k);
+        if (existsSync(p)) unlinkSync(p);
+      }
+    };
 
     if (usages.length > 0) {
       await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -208,14 +274,14 @@ export class MediaService {
           await tx.block.update({ where: { id: block.id }, data: { data: parsed.data } });
         }
 
-        if (existsSync(filePath)) unlinkSync(filePath);
+        deleteAllVariantFiles();
         await tx.media.delete({ where: { id } });
       });
 
       return { deleted: true, strippedFromBlocks: usages.length };
     }
 
-    if (existsSync(filePath)) unlinkSync(filePath);
+    deleteAllVariantFiles();
     await this.prisma.media.delete({ where: { id } });
     return { deleted: true };
   }
@@ -226,6 +292,10 @@ export class MediaService {
    * để block type khác thêm media reference sau này không cần sửa lại chỗ này —
    * chỉ cần theo đúng convention field tên `mediaId` trong schema.ts của block đó).
    * Lấy usage bất kể pageVersion.status (DRAFT/PUBLISHED/ARCHIVED).
+   *
+   * LƯU Ý TỐI ƯU CÒN THIẾU (chưa làm trong lần sửa này, ghi lại để task sau):
+   * hàm này vẫn load toàn bộ block trong DB rồi lọc bằng JS — nên chuyển sang
+   * Postgres JSONB query (`data @> ...`) để lọc ngay ở DB khi cần tối ưu hiệu năng thêm.
    */
   private async findUsages(mediaId: string): Promise<MediaUsageInfo[]> {
     const blocks = await this.prisma.block.findMany({
