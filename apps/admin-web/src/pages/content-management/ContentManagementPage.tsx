@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -17,8 +17,23 @@ export function ContentManagementPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  // null = mặc định (giữ nguyên thứ tự trả về từ server); khi bấm cột thì sort client-side
+  // trên tập dữ liệu của TRANG HIỆN TẠI (server chỉ hỗ trợ search, chưa hỗ trợ sort).
+  const [sortField, setSortField] = useState<'seoTitle' | 'status' | 'updatedAt' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const PAGE_SIZE = 5;
+  const handleSortClick = (field: 'seoTitle' | 'status' | 'updatedAt') => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      setSortField(null);
+    }
+  };
+
+  const PAGE_SIZE = 6;
 
   // Debounce 300ms trước khi bắn request search — tránh gọi API mỗi lần gõ 1 ký tự
   useEffect(() => {
@@ -40,6 +55,30 @@ export function ContentManagementPage() {
   });
 
   const [searchParams] = useSearchParams();
+
+  const sortedPages = useMemo(() => {
+    if (!sortField) {
+      // Mặc định: đảo ngược thứ tự server trả về → dữ liệu mới nhất (của trang hiện tại) lên đầu
+      return [...pages].reverse();
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...pages].sort((a, b) => {
+      if (sortField === 'seoTitle') {
+        const av = (a.publishedVersion as unknown as { seoMeta?: { title?: string } } | undefined)?.seoMeta?.title ?? '';
+        const bv = (b.publishedVersion as unknown as { seoMeta?: { title?: string } } | undefined)?.seoMeta?.title ?? '';
+        return av.localeCompare(bv) * dir;
+      }
+      if (sortField === 'status') {
+        const av = a.publishedVersion?.status ?? 'DRAFT';
+        const bv = b.publishedVersion?.status ?? 'DRAFT';
+        return av.localeCompare(bv) * dir;
+      }
+      // updatedAt
+      const av = a.publishedVersion?.updatedAt ? new Date(a.publishedVersion.updatedAt).getTime() : 0;
+      const bv = b.publishedVersion?.updatedAt ? new Date(b.publishedVersion.updatedAt).getTime() : 0;
+      return (av - bv) * dir;
+    });
+  }, [pages, sortField, sortDir]);
 
   useEffect(() => {
     if (searchParams.get('create') === 'true') {
@@ -77,7 +116,7 @@ export function ContentManagementPage() {
         <div className="max-w-max_content_width mx-auto">
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-xl">
+          {/* <div className="flex items-center justify-between mb-xl">
             <div>
               <h1 className="text-h1 font-h1 text-on-background">Pages</h1>
               <p className="text-body-md text-on-surface-variant mt-xs">
@@ -91,7 +130,7 @@ export function ContentManagementPage() {
               <span className="material-symbols-outlined text-[18px]">refresh</span>
               Refresh
             </button>
-          </div>
+          </div> */}
 
           {/* Loading */}
           {loading && (
@@ -125,18 +164,34 @@ export function ContentManagementPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
-                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Action'].map((h, i, arr) => (
-                        <th
-                          key={h}
-                          className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
-                        >
-                          {h}
-                        </th>
-                      ))}
+                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Action'].map((h, i, arr) => {
+                        const sortableField =
+                          h === 'SEO Title' ? 'seoTitle' : h === 'Status' ? 'status' : h === 'Last Updated' ? 'updatedAt' : null;
+                        return (
+                          <th
+                            key={h}
+                            className={`p-md text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === arr.length - 1 ? 'text-right' : 'text-left'}`}
+                          >
+                            {sortableField ? (
+                              <button
+                                type="button"
+                                onClick={() => handleSortClick(sortableField)}
+                                className="flex items-center gap-[2px] uppercase tracking-wider hover:text-on-background transition-colors"
+                                title={`Click để sắp xếp theo ${h}`}
+                              >
+                                <span>{h}</span>
+                                <SortArrow active={sortField === sortableField} dir={sortDir} />
+                              </button>
+                            ) : (
+                              h
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant">
-                    {pages.map((p) => (
+                    {sortedPages.map((p) => (
                       <PageRow
                         key={p.id}
                         page={p}
@@ -305,6 +360,18 @@ function FillerRow() {
         <span className="invisible text-body-md">&nbsp;</span>
       </td>
     </tr>
+  );
+}
+
+function SortArrow({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  return (
+    <span
+      className={`material-symbols-outlined text-[14px] transition-transform ${
+        active ? 'text-primary' : 'text-outline-variant'
+      } ${active && dir === 'desc' ? 'rotate-180' : ''}`}
+    >
+      arrow_upward
+    </span>
   );
 }
 
