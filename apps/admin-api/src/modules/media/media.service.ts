@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException
@@ -12,7 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
 import { getBlockDefinition } from '@cms/block-registry/schema-only';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { optimizeImage, isRasterImage, MEDIA_VARIANT_PRESETS } from './image-optimizer.util';
+import { optimizeImage, isRasterImage, MEDIA_VARIANT_PRESETS, decideOriginalVariant } from './image-optimizer.util';
 
 export const listMediaSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -51,6 +52,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
   private readonly uploadDir: string;
 
   constructor(private readonly prisma: PrismaService) {
@@ -122,36 +124,59 @@ export class MediaService {
       });
     }
 
-    const url = `/uploads/${key}`;
-
     // ── Sinh 3 variant (original/detail/thumb) — bỏ qua nếu là SVG (vector, giữ nguyên) ──
-    const variants = await this.generateVariants(filePath, key, file.mimetype);
+    // generateVariants() có thể đổi key/url/mimeType của bản "original" nếu quyết định
+    // dùng bản optimize WebP thay vì giữ file gốc (xem decideOriginalVariant()).
+    const { finalKey, finalUrl, finalMimeType, ...variants } = await this.generateVariants(
+      filePath,
+      key,
+      file.mimetype,
+    );
 
     return this.prisma.media.create({
       data: {
-        key,
-        url,
-        mimeType: file.mimetype,
+        key: finalKey,
+        url: finalUrl,
+        mimeType: finalMimeType,
         ...variants,
       },
     });
   }
 
   /**
-   * Sinh 3 file webp (original/detail/thumb) từ ảnh raster vừa upload, ghi ra disk cạnh file gốc
-   * (naming: `<base>.original.webp`, `<base>.detail.webp`, `<base>.thumb.webp`), trả về object
-   * để merge trực tiếp vào Prisma `create`/`update`.
+   * Sinh 3 variant (original/detail/thumb) từ ảnh raster vừa upload.
    *
-   * Với SVG: trả object rỗng (giữ 4 field null trong DB) vì SVG là vector, không cần variant.
+   * - `detail`/`thumb`: luôn convert WebP + ép ≤300KB, ghi ra file riêng cạnh file gốc
+   *   (naming: `<base>.detail.webp`, `<base>.thumb.webp`) — không đổi logic so với trước.
+   * - `original`: áp dụng `decideOriginalVariant()` —
+   *     + Size gốc > 300KB, hoặc optimize vẫn nhỏ hơn/bằng gốc → dùng bản optimize WebP,
+   *       key đổi đuôi thành `.webp` (rename file vật lý + xoá file gốc cũ).
+   *     + Size gốc <= 300KB VÀ optimize làm TĂNG size → giữ nguyên file gốc, key/mimeType
+   *       không đổi (không rename, không ghi đè).
+   *   Toàn bộ quyết định + số liệu size trước/sau được log lại để audit.
+   *
+   * Với SVG: trả nguyên `key`/`mimeType` đầu vào, 4 field detail/thumb rỗng (giữ null trong DB)
+   * vì SVG là vector, không cần variant.
    */
   private async generateVariants(
     sourceFilePath: string,
     key: string,
     mimeType: string,
-  ): Promise<{ detailKey?: string; detailUrl?: string; thumbKey?: string; thumbUrl?: string }> {
-    if (!isRasterImage(mimeType)) return {};
+  ): Promise<{
+    finalKey: string;
+    finalUrl: string;
+    finalMimeType: string;
+    detailKey?: string;
+    detailUrl?: string;
+    thumbKey?: string;
+    thumbUrl?: string;
+  }> {
+    if (!isRasterImage(mimeType)) {
+      return { finalKey: key, finalUrl: `/uploads/${key}`, finalMimeType: mimeType };
+    }
 
-    const base = key.replace(extname(key), '');
+    const ext = extname(key);
+    const base = key.replace(ext, '');
     const input = readFileSync(sourceFilePath);
 
     const [detail, thumb] = await Promise.all([
@@ -164,13 +189,45 @@ export class MediaService {
     writeFileSync(join(this.uploadDir, detailKey), detail.buffer);
     writeFileSync(join(this.uploadDir, thumbKey), thumb.buffer);
 
-    // Variant "original": cũng convert sang WebP + strip metadata (không ép targetBytes),
-    // GHI ĐÈ lên chính file gốc để tiết kiệm dung lượng disk (đã thống nhất: original cũng
-    // được tối ưu, không giữ file upload thô 100%).
-    const original = await optimizeImage(input, MEDIA_VARIANT_PRESETS.original);
-    writeFileSync(sourceFilePath, original.buffer);
+    // ── Variant "original": so sánh size gốc vs size sau optimize, quyết định giữ cái nào ──
+    const decision = await decideOriginalVariant(input, mimeType, ext);
+    const { originalSizeBytes, optimizedSizeBytes, wasSmallFile, optimizeMadeItBigger } = decision.meta;
+
+    this.logger.log(
+      `[upload][original] file="${key}" sizeGốc=${originalSizeBytes}B ` +
+      `(${(originalSizeBytes / 1024).toFixed(1)}KB), sizeSauOptimize=${optimizedSizeBytes}B ` +
+      `(${(optimizedSizeBytes / 1024).toFixed(1)}KB), wasSmallFile(<=300KB)=${wasSmallFile}, ` +
+      `optimizeMadeItBigger=${optimizeMadeItBigger}`,
+    );
+
+    let finalKey = key;
+    if (decision.usedOriginal) {
+      // Giữ nguyên file gốc đã ghi ở bước upload() trước đó — không đụng tới sourceFilePath.
+      this.logger.warn(
+        `[upload][original] file="${key}": GIỮ NGUYÊN file gốc vì optimize làm TĂNG size ` +
+        `(+${optimizedSizeBytes - originalSizeBytes}B). mimeType/extension không đổi.`,
+      );
+    } else {
+      const savedBytes = originalSizeBytes - optimizedSizeBytes;
+      const savedPercent = originalSizeBytes > 0 ? ((savedBytes / originalSizeBytes) * 100).toFixed(1) : '0';
+      this.logger.log(
+        `[upload][original] file="${key}": dùng bản optimize WebP, tiết kiệm ${savedBytes}B (${savedPercent}%).`,
+      );
+
+      finalKey = ext.toLowerCase() === '.webp' ? key : `${base}.webp`;
+      const finalPath = join(this.uploadDir, finalKey);
+      writeFileSync(finalPath, decision.buffer);
+
+      // Nếu extension đổi (vd .jpg -> .webp), xoá file gốc cũ để không rác file mồ côi trên disk.
+      if (finalKey !== key && existsSync(sourceFilePath)) {
+        unlinkSync(sourceFilePath);
+      }
+    }
 
     return {
+      finalKey,
+      finalUrl: `/uploads/${finalKey}`,
+      finalMimeType: decision.mimeType,
       detailKey,
       detailUrl: `/uploads/${detailKey}`,
       thumbKey,

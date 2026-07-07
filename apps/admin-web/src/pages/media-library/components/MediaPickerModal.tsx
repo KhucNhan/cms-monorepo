@@ -70,7 +70,7 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         showCloseButton={false}
-        className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0"
+        className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0"
       >
         <div className="flex justify-between items-center p-lg border-b border-outline-variant gap-md">
           <div className="min-w-0">
