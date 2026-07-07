@@ -41,12 +41,14 @@ async function bootstrap() {
 
   // CORS — chỉ cho phép admin-web origin trong production
   app.enableCors({
-  origin: process.env['CORS_ORIGIN']?.split(',') ?? [
-    'http://localhost:5173', // admin-web
-    'http://localhost:5175', // web (user)  ← thêm dòng này
-  ],
-  credentials: true,
-});
+    origin: process.env['CORS_ORIGIN']?.split(',') ?? [
+      'http://localhost:5173',
+      'http://localhost:5175',
+    ],
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Global filters & interceptors
   app.useGlobalFilters(new HttpExceptionFilter());
