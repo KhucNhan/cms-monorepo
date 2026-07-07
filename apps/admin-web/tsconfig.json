@@ -17,7 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@cms/block-registry": ["../../packages/block-registry/src/registry.ts"],
+      "@cms/shared-types": ["../../packages/shared-types/src/index.ts"]
     }
   },
   "include": ["src"]

@@ -9,7 +9,7 @@ import { ApiClientError } from '@/api/client';
 import type { Role } from '@/api/roles.api';
 
 export function RolesPage() {
-  const { roles, allPermissions, loading, error, refetch, createRole, renameRole, setPermissions, deleteRole } = useRoles();
+  const { roles, allPermissions, loading, error, refetch, createRole, setPermissions, deleteRole } = useRoles();
   const { can } = usePermissions();
   const { toasts, addToast, removeToast } = useToast();
 
@@ -19,7 +19,7 @@ export function RolesPage() {
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [draftPermissionIds, setDraftPermissionIds] = useState<Set<string>>(new Set());
   const [newRoleName, setNewRoleName] = useState('');
-  const [renamingName, setRenamingName] = useState('');
+  // const [renamingName, setRenamingName] = useState('');
   const [savingPerms, setSavingPerms] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -27,7 +27,7 @@ export function RolesPage() {
 
   const selectRole = (role: Role) => {
   setSelectedRoleId(role.id);
-  setRenamingName(role.name);
+  // setRenamingName(role.name);
 
   setDraftPermissionIds(
     new Set((role.permissions ?? []).map((p) => p.id))
@@ -52,16 +52,6 @@ export function RolesPage() {
       addToast('A new role has been created.', 'success');
     } catch (err) {
       addToast(err instanceof ApiClientError ? err.message : 'Creating a role failed.', 'error');
-    }
-  };
-
-  const handleRename = async () => {
-    if (!selectedRole || !renamingName.trim() || renamingName === selectedRole.name) return;
-    try {
-      await renameRole(selectedRole.id, renamingName.trim());
-      addToast('The role name has been changed.', 'success');
-    } catch (err) {
-      addToast(err instanceof ApiClientError ? err.message : 'The name change failed.', 'error');
     }
   };
 
