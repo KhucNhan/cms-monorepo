@@ -112,7 +112,7 @@ export function PageEditPage() {
       setSlugInput(pageData.slug);
       setMetaTitle(seoMeta.title ?? '');
       setMetaDescription(seoMeta.description ?? '');
-      setOriginalSlug(pageData.slug);
+      setOriginalSlug(originalSlug);
       setOriginalMetaTitle(seoMeta.title ?? '');
       setOriginalMetaDescription(seoMeta.description ?? '');
     } catch (err) {
@@ -348,7 +348,7 @@ export function PageEditPage() {
       setCurrentVersion(draft);                               // switch to draft version
       setBlocks(sortedFresh);                                // sync blocks
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedFresh))); // reset baseline
-      setOriginalSlug(trimmedSlug || page.slug);
+      setOriginalSlug(trimmedSlug || originalSlug); // reset baseline
       setOriginalMetaTitle(metaTitle.trim());
       setOriginalMetaDescription(metaDescription.trim());
       updateIsDirty(false);

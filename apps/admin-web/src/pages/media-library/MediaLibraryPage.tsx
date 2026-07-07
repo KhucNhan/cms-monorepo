@@ -6,7 +6,7 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useMedia } from '@/hooks/useMedia';
 import { ApiClientError } from '@/api/client';
 import type { MediaItem } from '@/types';
-import { MediaInUseError, type MediaUsageInfo } from '@/api/media.api';
+import {type MediaUsageInfo } from '@/api/media.api';
 import { Can } from '@/components/Can';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
