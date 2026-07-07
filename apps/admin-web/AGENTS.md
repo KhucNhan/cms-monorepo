@@ -91,3 +91,9 @@ pnpm --filter @cms/admin-web lint
 Canvas preview trong Page Editor tái dùng Renderer từ `block-registry`, nhưng theme Tailwind ở
 `apps/web` gần như rỗng → preview hiện **không khớp giao diện thật**. Đây là gap đã biết, không
 phải bug component nếu gặp task liên quan.
+
+## Deploy production — proxy KHÔNG hoạt động ở preview mode
+
+`server.proxy` trong `vite.config.ts` chỉ hoạt động khi chạy `vite dev`, **không hoạt động** khi chạy `vite preview` (dùng để serve production build khi deploy). Vì `src/api/client.ts` dùng đường dẫn tương đối (`BASE_URL`), khi deploy qua domain thật, phải đọc `VITE_API_URL` từ `.env.production` trỏ thẳng vào domain của `admin-api` (ví dụ `https://api.khucnhan.io.vn/api/v1`), nếu không toàn bộ API call sẽ 404. Chi tiết đầy đủ xem `DEPLOYMENT.md` ở root.
+
+Vite 6 `preview` mặc định chặn host lạ — khi map domain qua Cloudflare Tunnel hoặc reverse proxy khác, phải thêm domain vào `preview.allowedHosts` trong `vite.config.ts`.

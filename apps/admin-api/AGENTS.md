@@ -127,3 +127,7 @@ pnpm --filter admin-api prisma:seed      # ts-node chạy thẳng .ts, không qu
 - **`detailUrl` chưa được nối vào bất kỳ UI/consumer nào** — field đã tồn tại trong DB và được sinh
   ra lúc upload, nhưng chưa có chỗ nào (canvas preview, block editor...) thực sự dùng tới. Không
   phải bug nếu gặp task liên quan tới preview ảnh medium-size.
+
+## CORS khi deploy multi-subdomain
+
+Khi `admin-web` và `admin-api` chạy ở 2 subdomain khác nhau (ví dụ `admin.` và `api.`), phải khai báo `CORS_ORIGIN` trong `.env` với đầy đủ domain cách nhau bằng dấu phẩy, không khoảng trắng. `app.enableCors()` trong `main.ts` cũng phải khai báo tường minh `methods` (bao gồm `PATCH`, `DELETE`) — nếu để mặc định, preflight có thể chặn các method này dù origin đã đúng, gây lỗi CORS khó debug. Chi tiết xem `DEPLOYMENT.md` ở root.
