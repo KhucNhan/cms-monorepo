@@ -128,6 +128,14 @@ giả định thứ gì tồn tại, kiểm tra thực tế:
 - **`Role.permissions` là `Json` (mảng string) trong Prisma, không có model `Permission` riêng** —
   README mục "Database schema" vẽ sơ đồ có `RolePermissions` như bảng nối là mô tả logic, không phải
   bảng thật. Query permission luôn qua `role.permissions` (mảng), không `role.rolePermissions.permission`.
+- **`Page.title` (mới) khác hoàn toàn `PageVersion.seoMeta.title`** — đừng nhầm 2 field cùng tên
+  "title" này. `Page.title` là tên hiển thị nội bộ (Content Management list, dùng làm baseline khi
+  Save), sống ở `Page`, **không versioned** nên update ngay lập tức bất kể trạng thái
+  DRAFT/PUBLISHED. `seoMeta.title` là thẻ SEO `<title>` công khai, sống ở `PageVersion`, phải qua
+  DRAFT rồi Publish mới lộ ra ngoài. Chi tiết rationale + hệ quả: xem `ARCHITECTURE-DESIGN.md` mục
+  6, chi tiết endpoint/known gap: xem `apps/admin-api/AGENTS.md` mục "Page Title". Navbar của
+  `apps/web` chủ động **không** dùng `Page.title` (suy nhãn menu từ `slug`) — đây là quyết định sản
+  phẩm có chủ đích, không phải thiếu sót.
 
 ## 5. Quy ước code
 
