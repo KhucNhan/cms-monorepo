@@ -73,6 +73,21 @@ export function useMedia(filters: MediaFilters = {}) {
     return updated;
   }, []);
 
+  const updateMedia = useCallback(async (id: string, body: { name?: string; altText?: string }) => {
+    const updated = await mediaApi.update(id, body);
+    setState((s) => {
+      if (!s.data) return s;
+      return {
+        ...s,
+        data: {
+          ...s.data,
+          data: s.data.data.map((m) => (m.id === id ? updated : m)),
+        },
+      };
+    });
+    return updated;
+  }, []);
+
   return {
     media: state.data?.data ?? [],
     total: state.data?.meta?.total ?? 0,
@@ -86,5 +101,6 @@ export function useMedia(filters: MediaFilters = {}) {
     checkMediaUsage,
     uploadMedia,
     renameMedia,
+    updateMedia,
   };
 }

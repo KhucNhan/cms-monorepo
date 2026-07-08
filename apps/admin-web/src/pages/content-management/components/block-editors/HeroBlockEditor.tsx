@@ -154,7 +154,7 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
                 <img
                   src={displayUrl!}
                   alt={image.alt || 'Hero preview'}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                   loading="lazy"
                 />
               </div>
