@@ -122,3 +122,82 @@ export const MEDIA_VARIANT_PRESETS = {
 export function isRasterImage(mimeType: string): boolean {
   return mimeType !== 'image/svg+xml';
 }
+
+// ─────────────────────────────────────────────────────────
+// Variant "original" — logic so sánh size gốc vs size sau optimize
+// ─────────────────────────────────────────────────────────
+
+/** Ngưỡng coi là "file đã nhỏ sẵn" — dưới ngưỡng này mới cần rollback nếu optimize làm to hơn. */
+export const SMALL_FILE_THRESHOLD_BYTES = 300 * 1024; // 300KB
+
+export interface OriginalVariantDecision {
+  /** Buffer cuối cùng sẽ ghi xuống disk (gốc hoặc đã optimize, tuỳ quyết định). */
+  buffer: Buffer;
+  width: number | null;
+  height: number | null;
+  /** mimeType cuối cùng: 'image/webp' nếu dùng bản optimize, giữ nguyên mimeType gốc nếu rollback. */
+  mimeType: string;
+  /** extension cuối cùng: '.webp' nếu dùng bản optimize, giữ nguyên extension gốc nếu rollback. */
+  extension: string;
+  /** true = đã rollback dùng file gốc, KHÔNG dùng bản optimize. */
+  usedOriginal: boolean;
+  /** Thông tin để log/audit — không phục vụ logic, chỉ để caller ghi log. */
+  meta: {
+    originalSizeBytes: number;
+    optimizedSizeBytes: number;
+    wasSmallFile: boolean; // size gốc <= 300KB
+    optimizeMadeItBigger: boolean; // optimizedSize > originalSize
+  };
+}
+
+/**
+ * Quyết định dùng bản gốc hay bản optimize (WebP) cho variant "original" lúc upload.
+ *
+ * Quy tắc (đã chốt với người dùng):
+ * 1. Luôn chạy optimize (WebP, quality 90, cap 2560px, strip metadata) để có số liệu so sánh.
+ * 2. Nếu size gốc <= 300KB VÀ bản optimize LỚN HƠN size gốc:
+ *      → rollback hoàn toàn, giữ nguyên buffer + mimeType + extension gốc (ưu tiên dung lượng,
+ *        chấp nhận không đồng nhất 100% định dạng WebP).
+ * 3. Ngược lại (gốc > 300KB, hoặc optimize vẫn nhỏ hơn/bằng): dùng bản optimize WebP.
+ *
+ * Hàm thuần (không log, không side-effect I/O ngoài sharp) để dễ unit test — caller
+ * (MediaService) chịu trách nhiệm log kết quả trả về.
+ */
+export async function decideOriginalVariant(
+  inputBuffer: Buffer,
+  originalMimeType: string,
+  originalExtension: string,
+): Promise<OriginalVariantDecision> {
+  const originalSizeBytes = inputBuffer.length;
+
+  const optimized = await optimizeImage(inputBuffer, MEDIA_VARIANT_PRESETS.original);
+  const optimizedSizeBytes = optimized.sizeBytes;
+
+  const wasSmallFile = originalSizeBytes <= SMALL_FILE_THRESHOLD_BYTES;
+  const optimizeMadeItBigger = optimizedSizeBytes > originalSizeBytes;
+
+  const meta = { originalSizeBytes, optimizedSizeBytes, wasSmallFile, optimizeMadeItBigger };
+
+  if (wasSmallFile && optimizeMadeItBigger) {
+    const originalMeta = await sharp(inputBuffer).metadata();
+    return {
+      buffer: inputBuffer,
+      width: originalMeta.width ?? null,
+      height: originalMeta.height ?? null,
+      mimeType: originalMimeType,
+      extension: originalExtension,
+      usedOriginal: true,
+      meta,
+    };
+  }
+
+  return {
+    buffer: optimized.buffer,
+    width: optimized.width,
+    height: optimized.height,
+    mimeType: 'image/webp',
+    extension: '.webp',
+    usedOriginal: false,
+    meta,
+  };
+}

@@ -12,7 +12,9 @@ interface HeroBlockEditorProps {
 
 export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
   const [showPicker, setShowPicker] = useState(false);
-  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  // Preview trong editor chỉ cần variant "thumb" (cap 400px, ≤100KB), không cần tải bản
+  // "original" full-size — nhẹ hơn đáng kể cho khung preview nhỏ (w-48 aspect-video).
+  const [resolvedPreviewUrl, setResolvedPreviewUrl] = useState<string | null>(null);
 
   const title = data.title ?? '';
   const subtitle = data.subtitle ?? '';
@@ -22,14 +24,12 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
   const overlayOpacity = data.overlayOpacity ?? 40;
   const image = data.image ?? { mediaId: '', alt: '' };
 
-  // Resolve preview URL from mediaId when url was stripped during save (legacy records)
+  // Resolve preview URL từ mediaId khi url đã bị strip lúc save (legacy records — xem
+  // MediaService.stripMediaReference()). Ưu tiên thumbUrl cho preview, fallback về url gốc
+  // nếu record cũ chưa có thumbUrl (upload trước khi có tính năng Media Optimization).
   useEffect(() => {
-    if (image.url) {
-      setResolvedUrl(image.url);
-      return;
-    }
     if (!image.mediaId) {
-      setResolvedUrl(null);
+      setResolvedPreviewUrl(null);
       return;
     }
 
@@ -37,18 +37,18 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
     mediaApi
       .getOne(image.mediaId)
       .then((media) => {
-        if (!cancelled) setResolvedUrl(media.url);
+        if (!cancelled) setResolvedPreviewUrl(media.thumbUrl ?? media.url);
       })
       .catch(() => {
-        if (!cancelled) setResolvedUrl(null);
+        if (!cancelled) setResolvedPreviewUrl(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [image.mediaId, image.url]);
+  }, [image.mediaId]);
 
-  const displayUrl = image.url || resolvedUrl;
+  const displayUrl = resolvedPreviewUrl;
   const hasImage = Boolean(image.mediaId && displayUrl);
 
   const handleSelectMedia = (media: MediaItem) => {
@@ -60,12 +60,14 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
         alt: image.alt || media.key.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
       },
     });
+    // Cập nhật preview ngay từ media vừa chọn, không cần đợi round-trip getOne().
+    setResolvedPreviewUrl(media.thumbUrl ?? media.url);
     setShowPicker(false);
   };
 
   const handleRemoveImage = () => {
     onChange({ ...data, image: { mediaId: '', alt: '', url: undefined } });
-    setResolvedUrl(null);
+    setResolvedPreviewUrl(null);
   };
 
   return (
@@ -153,6 +155,7 @@ export function HeroBlockEditor({ data, onChange }: HeroBlockEditorProps) {
                   src={displayUrl!}
                   alt={image.alt || 'Hero preview'}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
               </div>
               <div className="flex-1 flex flex-col gap-sm">
