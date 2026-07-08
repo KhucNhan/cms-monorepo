@@ -94,6 +94,7 @@ export interface PageVersion {
 export interface Page {
   id: string;
   slug: string;
+  title: string;
   createdAt: string;
   publishedVersionId: string | null;
   publishedVersion: {

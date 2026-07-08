@@ -64,7 +64,7 @@ export class PagesController {
 
   @Patch(':id')
   @RequirePermissions('page:update')
-  @ApiOperation({ summary: 'Update page slug' })
+  @ApiOperation({ summary: 'Update page title and/or slug' })
   update(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updatePageSchema)) dto: UpdatePageDto,

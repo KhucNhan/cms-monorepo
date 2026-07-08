@@ -9,7 +9,8 @@ export const createPageSchema = z.object({
   slug: z
     .string().min(1).max(200)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase kebab-case'),
-  title: z.string().max(100).optional(),
+  // Page.title: tên hiển thị của trang, tách biệt hoàn toàn với seoMeta.title (thẻ SEO <title>).
+  title: z.string().max(100).optional().default(''),
   seoMeta: z.object({
     title:       z.string().max(60).optional(),
     description: z.string().max(160).optional(),
@@ -21,6 +22,7 @@ export const createPageSchema = z.object({
 export const updatePageSchema = z.object({
   slug: z.string().min(1).max(200)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+  title: z.string().max(100).optional(),
 });
 
 export const listPagesSchema = z.object({
@@ -91,18 +93,14 @@ export class PagesService {
       throw new ConflictException({ code: ErrorCode.CONFLICT, message: `Slug already exists: ${dto.slug}` });
     }
 
-    const mergedSeoMeta = {
-      ...(dto.seoMeta ?? {}),
-      ...(dto.title ? { title: dto.title } : {}),
-    };
-
     return this.prisma.page.create({
       data: {
         slug: dto.slug,
+        title: dto.title ?? '',
         versions: {
           create: {
             status: 'DRAFT',
-            seoMeta: mergedSeoMeta,
+            seoMeta: dto.seoMeta ?? {},
             createdBy,
           },
         },
@@ -126,7 +124,16 @@ export class PagesService {
       }
     }
 
-    return this.prisma.page.update({ where: { id }, data: { slug: dto.slug } });
+    // title là thuộc tính của Page (không versioned), có thể update trực tiếp bất kể
+    // trạng thái DRAFT/PUBLISHED của version hiện tại — khác với slug (cũng ở Page nhưng
+    // theo quy ước hiện tại lưu trực tiếp) và seoMeta (thuộc PageVersion, phải qua draft).
+    return this.prisma.page.update({
+      where: { id },
+      data: {
+        ...(dto.slug !== undefined ? { slug: dto.slug } : {}),
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+      },
+    });
   }
 
   async delete(id: string) {

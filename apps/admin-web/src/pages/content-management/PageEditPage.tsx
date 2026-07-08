@@ -40,14 +40,21 @@ export function PageEditPage() {
   const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
   const [dragOverBlockIndex, setDragOverBlockIndex] = useState<number | null>(null);
 
-  // ─── Page Info (slug + SEO title/description) ──────────────────────────────
+  // ─── Page Info (title + slug) & SEO (title/description) — 2 section riêng ──
+  const [titleInput, setTitleInput] = useState('');
   const [slugInput, setSlugInput] = useState('');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   // Baseline snapshot to detect changes when saving alongside blocks
+  const [originalTitle, setOriginalTitle] = useState('');
   const [originalSlug, setOriginalSlug] = useState('');
   const [originalMetaTitle, setOriginalMetaTitle] = useState('');
   const [originalMetaDescription, setOriginalMetaDescription] = useState('');
+
+  // Collapse state cho 2 section — mặc định mở cả hai
+  const [isPageInfoOpen, setIsPageInfoOpen] = useState(true);
+  const [isSeoOpen, setIsSeoOpen] = useState(true);
+  const [isBlocksOpen, setIsBlocksOpen] = useState(true);
 
   // Synchronous ref tracking for React Router blocker evaluation
   const isDirtyRef = useRef(false);
@@ -109,10 +116,12 @@ export function PageEditPage() {
 
       // Sync editable page-info fields with the freshly loaded data
       const seoMeta = (activeVersion.seoMeta ?? {}) as { title?: string; description?: string };
+      setTitleInput(pageData.title ?? '');
       setSlugInput(pageData.slug);
       setMetaTitle(seoMeta.title ?? '');
       setMetaDescription(seoMeta.description ?? '');
-      setOriginalSlug(originalSlug);
+      setOriginalTitle(pageData.title ?? '');
+      setOriginalSlug(pageData.slug);
       setOriginalMetaTitle(seoMeta.title ?? '');
       setOriginalMetaDescription(seoMeta.description ?? '');
     } catch (err) {
@@ -326,11 +335,16 @@ export function PageEditPage() {
 
       await Promise.all(promises);
 
-      // C. Save slug / SEO title / description if changed
+      // C. Save title / slug (Page-level) và SEO title/description (PageVersion-level) nếu đổi
+      const trimmedTitle = titleInput.trim();
       const trimmedSlug = slugInput.trim();
-      if (trimmedSlug && trimmedSlug !== page.slug) {
-        await pagesApi.update(page.id, { slug: trimmedSlug });
+      const pagePatch: { title?: string; slug?: string } = {};
+      if (trimmedTitle !== originalTitle) pagePatch.title = trimmedTitle;
+      if (trimmedSlug && trimmedSlug !== page.slug) pagePatch.slug = trimmedSlug;
+      if (Object.keys(pagePatch).length > 0) {
+        await pagesApi.update(page.id, pagePatch);
       }
+
       const metaChanged =
         metaTitle.trim() !== originalMetaTitle || metaDescription.trim() !== originalMetaDescription;
       if (metaChanged) {
@@ -348,6 +362,7 @@ export function PageEditPage() {
       setCurrentVersion(draft);                               // switch to draft version
       setBlocks(sortedFresh);                                // sync blocks
       setOriginalBlocks(JSON.parse(JSON.stringify(sortedFresh))); // reset baseline
+      setOriginalTitle(trimmedTitle);
       setOriginalSlug(trimmedSlug || originalSlug); // reset baseline
       setOriginalMetaTitle(metaTitle.trim());
       setOriginalMetaDescription(metaDescription.trim());
@@ -639,124 +654,208 @@ export function PageEditPage() {
                 <code className="font-mono bg-surface-container px-xs rounded">/{page.slug}</code>
               </p>
             </div>
-            
-            <Can permission="page:update">
-              <Button
-                variant="primary"
-                icon="add_box"
-                size="md"
-                onClick={() => setShowPicker(true)}
-              >
-                Add Block
-              </Button>
-            </Can>
           </div>
 
-          {/* Page Info: slug + SEO title/description */}
+          {/* Section 1: Page Info — title + slug (thuộc Page, không versioned) */}
           <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
-            <h3 className="text-h4 font-semibold text-on-surface">Page Info</h3>
+            <button
+              type="button"
+              onClick={() => setIsPageInfoOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-left"
+              aria-expanded={isPageInfoOpen}
+            >
+              <h3 className="text-h4 font-semibold text-on-surface">Page Info</h3>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
+                {isPageInfoOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-              <div className="flex flex-col gap-xs md:col-span-2">
-                <label className="text-label-md font-bold text-on-surface">Slug</label>
-                <div className="flex items-center gap-xs">
-                  <span className="text-on-surface-variant text-body-md">/</span>
+            {isPageInfoOpen && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                <div className="flex flex-col gap-xs">
+                  <label className="text-label-md font-bold text-on-surface">Title</label>
                   <input
                     type="text"
-                    value={slugInput}
+                    maxLength={100}
+                    value={titleInput}
                     onChange={(e) => {
-                      setSlugInput(e.target.value);
+                      setTitleInput(e.target.value);
                       updateIsDirty(true);
                     }}
-                    className="flex-1 bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none font-mono"
-                    placeholder="page-slug"
+                    className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
+                    placeholder="e.g. Home Page"
                   />
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-xs">
-                <label className="text-label-md font-bold text-on-surface">SEO Title</label>
-                <input
-                  type="text"
-                  maxLength={60}
-                  value={metaTitle}
-                  onChange={(e) => {
-                    setMetaTitle(e.target.value);
-                    updateIsDirty(true);
-                  }}
-                  className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
-                  placeholder="e.g. Home | CMS Site"
-                />
-                <span className="text-[11px] text-on-surface-variant">{metaTitle.length}/60</span>
+                <div className="flex flex-col gap-xs">
+                  <label className="text-label-md font-bold text-on-surface">Slug</label>
+                  <div className="flex items-center gap-xs">
+                    <span className="text-on-surface-variant text-body-md">/</span>
+                    <input
+                      type="text"
+                      value={slugInput}
+                      onChange={(e) => {
+                        setSlugInput(e.target.value);
+                        updateIsDirty(true);
+                      }}
+                      className="flex-1 bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none font-mono"
+                      placeholder="page-slug"
+                    />
+                  </div>
+                </div>
               </div>
-
-              <div className="flex flex-col gap-xs">
-                <label className="text-label-md font-bold text-on-surface">SEO Description</label>
-                <textarea
-                  rows={2}
-                  maxLength={160}
-                  value={metaDescription}
-                  onChange={(e) => {
-                    setMetaDescription(e.target.value);
-                    updateIsDirty(true);
-                  }}
-                  className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none resize-none"
-                  placeholder="e.g. Welcome to our site"
-                />
-                <span className="text-[11px] text-on-surface-variant">{metaDescription.length}/160</span>
-              </div>
-            </div>
-
-            {isDraftStatus === false && (
-              <p className="text-[11px] text-on-surface-variant">
-                Editing this while viewing PUBLISHED will create/update a DRAFT — publish it when ready.
-              </p>
             )}
           </div>
 
-          {/* Blocks List */}
-          {blocks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-xl text-center border-2 border-dashed border-outline-variant rounded-xl bg-surface">
-              <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">
-                view_stream
+          {/* Section 2: SEO Metadata — title/description (thuộc PageVersion, cần Save Draft) */}
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
+            <button
+              type="button"
+              onClick={() => setIsSeoOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-left"
+              aria-expanded={isSeoOpen}
+            >
+              <h3 className="text-h4 font-semibold text-on-surface">SEO</h3>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
+                {isSeoOpen ? 'expand_less' : 'expand_more'}
               </span>
-              <h4 className="text-h4 text-on-surface">No blocks in this page version</h4>
-              <p className="text-body-md text-on-surface-variant max-w-sm mb-lg mt-sm">
-                Add blocks using the button below to start building the page layout.
-              </p>
-              <Button variant="secondary" icon="add" onClick={() => setShowPicker(true)}>
-                Add First Block
-              </Button>
+            </button>
+
+            {isSeoOpen && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-label-md font-bold text-on-surface">SEO Title</label>
+                    <input
+                      type="text"
+                      maxLength={60}
+                      value={metaTitle}
+                      onChange={(e) => {
+                        setMetaTitle(e.target.value);
+                        updateIsDirty(true);
+                      }}
+                      className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none"
+                      placeholder="e.g. Home | CMS Site"
+                    />
+                    <span className="text-[11px] text-on-surface-variant">{metaTitle.length}/60</span>
+                  </div>
+
+                  <div className="flex flex-col gap-xs">
+                    <label className="text-label-md font-bold text-on-surface">SEO Description</label>
+                    <textarea
+                      rows={2}
+                      maxLength={160}
+                      value={metaDescription}
+                      onChange={(e) => {
+                        setMetaDescription(e.target.value);
+                        updateIsDirty(true);
+                      }}
+                      className="bg-surface border border-outline-variant rounded-lg px-sm py-2 text-body-md focus:border-primary outline-none resize-none"
+                      placeholder="e.g. Welcome to our site"
+                    />
+                    <span className="text-[11px] text-on-surface-variant">{metaDescription.length}/160</span>
+                  </div>
+                </div>
+
+                {isDraftStatus === false && (
+                  <p className="text-[11px] text-on-surface-variant">
+                    Editing this while viewing PUBLISHED will create/update a DRAFT — publish it when ready.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Section 3: Page Sections (blocks) — header collapsible, Add Block ở cuối header,
+              nội dung tự scroll bên trong thay vì kéo dài toàn trang khi mở rộng */}
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsBlocksOpen((v) => !v)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setIsBlocksOpen((v) => !v);
+                }
+              }}
+              aria-expanded={isBlocksOpen}
+              className="flex items-center justify-between w-full gap-md cursor-pointer select-none"
+            >
+              <div className="flex items-center gap-sm min-w-0">
+                <h3 className="text-h4 font-semibold text-on-surface">Page Sections</h3>
+                <span className="px-sm py-0.5 rounded-full text-label-sm font-bold bg-outline-variant/30 text-on-surface-variant flex-shrink-0">
+                  {blocks.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-sm flex-shrink-0">
+                <Can permission="page:update">
+                  <Button
+                    variant="primary"
+                    icon="add_box"
+                    size="md"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowPicker(true);
+                    }}
+                  >
+                    Add Block
+                  </Button>
+                </Can>
+                <span className="material-symbols-outlined text-[20px] text-on-surface-variant flex-shrink-0">
+                  {isBlocksOpen ? 'expand_less' : 'expand_more'}
+                </span>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-lg">
-              {blocks.map((block, idx) => (
-                <BlockSectionCard
-                  key={block.id}
-                  block={block}
-                  index={idx}
-                  totalBlocks={blocks.length}
-                  isDragging={draggedBlockIndex === idx}
-                  isDragOver={dragOverBlockIndex === idx && draggedBlockIndex !== null && draggedBlockIndex !== idx}
-                  onDragStart={() => setDraggedBlockIndex(idx)}
-                  onDragEnter={() => {
-                    if (draggedBlockIndex !== null && draggedBlockIndex !== idx) {
-                      setDragOverBlockIndex(idx);
-                    }
-                  }}
-                  onDragEnd={() => {
-                    if (draggedBlockIndex !== null && dragOverBlockIndex !== null) {
-                      reorderBlocks(draggedBlockIndex, dragOverBlockIndex);
-                    }
-                    setDraggedBlockIndex(null);
-                    setDragOverBlockIndex(null);
-                  }}
-                  onDelete={() => handleDeleteBlock(block.id)}
-                  onUpdateData={(newData) => updateBlockData(block.id, newData)}
-                />
-              ))}
-            </div>
-          )}
+
+            {isBlocksOpen && (
+              <div className="max-h-[65vh] overflow-y-auto pr-xs -mr-xs">
+                {blocks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-xl text-center border-2 border-dashed border-outline-variant rounded-xl bg-surface">
+                    <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">
+                      view_stream
+                    </span>
+                    <h4 className="text-h4 text-on-surface">No blocks in this page version</h4>
+                    <p className="text-body-md text-on-surface-variant max-w-sm mb-lg mt-sm">
+                      Add blocks using the button below to start building the page layout.
+                    </p>
+                    <Button variant="secondary" icon="add" onClick={() => setShowPicker(true)}>
+                      Add First Block
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-lg">
+                    {blocks.map((block, idx) => (
+                      <BlockSectionCard
+                        key={block.id}
+                        block={block}
+                        index={idx}
+                        totalBlocks={blocks.length}
+                        isDragging={draggedBlockIndex === idx}
+                        isDragOver={dragOverBlockIndex === idx && draggedBlockIndex !== null && draggedBlockIndex !== idx}
+                        onDragStart={() => setDraggedBlockIndex(idx)}
+                        onDragEnter={() => {
+                          if (draggedBlockIndex !== null && draggedBlockIndex !== idx) {
+                            setDragOverBlockIndex(idx);
+                          }
+                        }}
+                        onDragEnd={() => {
+                          if (draggedBlockIndex !== null && dragOverBlockIndex !== null) {
+                            reorderBlocks(draggedBlockIndex, dragOverBlockIndex);
+                          }
+                          setDraggedBlockIndex(null);
+                          setDragOverBlockIndex(null);
+                        }}
+                        onDelete={() => handleDeleteBlock(block.id)}
+                        onUpdateData={(newData) => updateBlockData(block.id, newData)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

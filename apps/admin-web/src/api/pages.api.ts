@@ -51,9 +51,9 @@ export const pagesApi = {
 
   /**
    * PATCH /api/v1/pages/:id
-   * Cập nhật slug của page
+   * Cập nhật title và/hoặc slug của page
    */
-  update: (id: string, data: { slug?: string }) =>
+  update: (id: string, data: { slug?: string; title?: string }) =>
     apiClient.patch<Page>(`/pages/${id}`, data),
 
   /**

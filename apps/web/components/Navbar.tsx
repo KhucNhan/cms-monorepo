@@ -5,6 +5,17 @@ function pageHref(slug: string): string {
   return slug === 'homepage' ? '/' : `/${slug}`;
 }
 
+// Nhãn hiển thị trên Navbar được suy ra từ slug, KHÔNG dùng `page.title` —
+// title chỉnh sửa ở admin (Page.title) chỉ phục vụ nội bộ CMS, không ảnh hưởng
+// tới nav công khai. Ví dụ: "about-us" → "About Us".
+function slugToLabel(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export async function Navbar() {
   const pages = await getPublishedPages();
 
@@ -22,7 +33,7 @@ export async function Navbar() {
               href={pageHref(page.slug)}
               className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
             >
-              {page.title}
+              {slugToLabel(page.slug)}
             </Link>
           ))}
       </nav>
