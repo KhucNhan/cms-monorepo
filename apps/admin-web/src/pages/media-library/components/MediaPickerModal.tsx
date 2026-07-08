@@ -8,6 +8,19 @@ import type { MediaItem } from '@/types';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
 
+const PAGE_SIZE = 10; // 2 rows × 5 columns
+
+type MimeFilter = 'all' | 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/svg+xml';
+
+const MIME_FILTERS: { label: string; value: MimeFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'JPEG', value: 'image/jpeg' },
+  { label: 'PNG', value: 'image/png' },
+  { label: 'WebP', value: 'image/webp' },
+  { label: 'GIF', value: 'image/gif' },
+  { label: 'SVG', value: 'image/svg+xml' },
+];
+
 interface MediaPickerModalProps {
   onSelect: (media: MediaItem) => void;
   onCancel: () => void;
@@ -17,6 +30,7 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [mimeFilter, setMimeFilter] = useState<MimeFilter>('all');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
@@ -32,11 +46,17 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
 
   const { media, total, loading, error, refetch } = useMedia({
     page,
-    pageSize: 24,
+    pageSize: PAGE_SIZE,
     search: searchQuery || undefined,
+    mimeType: mimeFilter === 'all' ? undefined : mimeFilter,
   });
 
-  const totalPages = Math.ceil(total / 24);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const handleMimeFilter = (value: MimeFilter) => {
+    setMimeFilter(value);
+    setPage(1);
+  };
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -62,7 +82,9 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
   const isEmpty = !loading && !error && media.length === 0;
   const emptyMessage = searchQuery
     ? `No images matching "${searchQuery}"`
-    : 'No media files yet. Upload an image below.';
+    : mimeFilter !== 'all'
+      ? `No ${MIME_FILTERS.find((f) => f.value === mimeFilter)?.label ?? ''} images found.`
+      : 'No media files yet. Upload an image below.';
 
   return (
     <Dialog open onOpenChange={() => {/* no-op: chỉ đóng qua nút X hoặc Cancel */}}>
@@ -70,8 +92,9 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         showCloseButton={false}
-        className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0"
+        className="bg-surface rounded-xl shadow-2xl border border-outline-variant w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0"
       >
+        {/* ── Header ── */}
         <div className="flex justify-between items-center p-lg border-b border-outline-variant gap-md">
           <div className="min-w-0">
             <h3 className="text-h3 font-h3 text-on-surface">Choose from Media Library</h3>
@@ -104,7 +127,9 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
           </div>
         </div>
 
-        <div className="px-lg pt-md pb-sm border-b border-outline-variant">
+        {/* ── Search + Mime filter ── */}
+        <div className="px-lg pt-md pb-sm border-b border-outline-variant space-y-sm">
+          {/* Search */}
           <div className="relative">
             <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant pointer-events-none">
               search
@@ -126,20 +151,42 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
               </button>
             )}
           </div>
+
+          {/* Mime type filter tabs */}
+          <div className="flex items-center gap-xs flex-wrap">
+            {MIME_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => handleMimeFilter(f.value)}
+                className={[
+                  'px-sm py-0.5 rounded-full text-label-md border transition-colors',
+                  mimeFilter === f.value
+                    ? 'bg-primary text-on-primary border-primary'
+                    : 'bg-surface-container border-outline-variant text-on-surface-variant hover:bg-surface-container-high',
+                ].join(' ')}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Upload feedback */}
           {uploadError && (
-            <p className="text-label-sm text-error mt-sm flex items-center gap-xs">
+            <p className="text-label-sm text-error flex items-center gap-xs">
               <span className="material-symbols-outlined text-[16px]">error</span>
               {uploadError}
             </p>
           )}
           {uploadSuccess && (
-            <p className="text-label-sm text-primary mt-sm flex items-center gap-xs">
+            <p className="text-label-sm text-primary flex items-center gap-xs">
               <span className="material-symbols-outlined text-[16px]">check_circle</span>
               {uploadSuccess}
             </p>
           )}
         </div>
 
+        {/* ── Media grid ── */}
         <div className="flex-1 overflow-y-auto p-lg">
           {loading && (
             <div className="flex items-center justify-center p-xl text-on-surface-variant gap-sm">
@@ -163,7 +210,7 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
             <div className="flex flex-col items-center p-xl text-on-surface-variant text-center">
               <span className="material-symbols-outlined text-[48px] mb-md">perm_media</span>
               <p className="mb-md">{emptyMessage}</p>
-              {!searchQuery && (
+              {!searchQuery && mimeFilter === 'all' && (
                 <Button
                   variant="primary"
                   icon="upload"
@@ -177,7 +224,7 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
           )}
 
           {!loading && media.length > 0 && (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-sm">
+            <div className="grid grid-cols-5 gap-sm">
               {media.map((item) => (
                 <button
                   key={item.id}
@@ -201,19 +248,35 @@ export function MediaPickerModal({ onSelect, onCancel }: MediaPickerModalProps) 
           )}
         </div>
 
-        {totalPages > 1 && (
-          <div className="p-md border-t border-outline-variant flex items-center justify-center gap-sm">
-            <Button variant="ghost" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+        {/* ── Pagination ── */}
+        <div className="p-md border-t border-outline-variant flex items-center justify-between gap-sm">
+          <span className="text-label-sm text-on-surface-variant">
+            {total > 0 ? `${total} file${total !== 1 ? 's' : ''}` : ''}
+          </span>
+          <div className="flex items-center gap-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               Previous
             </Button>
-            <span className="text-body-md text-on-surface-variant">
-              Page {page} of {totalPages}
+            <span className="text-body-md text-on-surface-variant min-w-[80px] text-center">
+              {totalPages > 0 ? `Page ${page} of ${totalPages}` : 'Page 1 of 1'}
             </span>
-            <Button variant="ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage((p) => p + 1)}
+            >
               Next
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
             </Button>
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );
