@@ -18,7 +18,7 @@ const buttonVariants = cva(
         primary:
           'bg-primary text-on-primary hover:opacity-90',
         secondary:
-          'bg-secondary-container text-on-secondary-container hover:opacity-90',
+          'bg-secondary-container text-on-secondary-container hover:bg-gray-100',
         ghost:
           'bg-transparent text-on-surface hover:bg-surface-container-high',
         danger:

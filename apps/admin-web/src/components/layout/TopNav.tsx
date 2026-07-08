@@ -56,10 +56,28 @@ export function TopNav({ title, breadcrumb, actions }: TopNavProps) {
           <button
             onClick={toggle}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 -ml-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-all duration-200 flex-shrink-0"
+            className={`
+              p-1.5
+              transition-all
+              duration-300
+              flex-shrink-0
+              ${
+                isCollapsed
+                  ? '-ml-4 text-white bg-on-secondary-fixed rounded-r-full rounded-l-none hover:bg-[rgb(26_26_44_/_80%)]'
+                  : '-ml-1.5 text-on-surface-variant rounded-full hover:bg-surface-container-high'
+              }
+            `}
           >
-            <span className="material-symbols-outlined text-[22px]">
-              menu
+            <span
+              className={`
+                material-symbols-outlined
+                text-[22px]
+                transition-transform
+                duration-300
+                ${isCollapsed ? 'rotate-180' : 'rotate-0'}
+              `}
+            >
+              chevron_left
             </span>
           </button>
 

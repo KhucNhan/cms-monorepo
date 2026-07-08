@@ -22,6 +22,7 @@ export function Sidebar() {
         isCollapsed ? 'w-0' : 'w-sidebar_width',
       )}
     >
+      <h1 className='self-center text-[24px] text-white py-[12px]'>Khuc Chi Nhan</h1>
       <nav className="flex-1 overflow-y-auto custom-scrollbar px-0 pt-0">
         <ul className="flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => (
