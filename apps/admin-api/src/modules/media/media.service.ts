@@ -178,13 +178,32 @@ export class MediaService {
     finalKey: string;
     finalUrl: string;
     finalMimeType: string;
+    width: number | null;
+    height: number | null;
     detailKey?: string;
     detailUrl?: string;
     thumbKey?: string;
     thumbUrl?: string;
   }> {
     if (!isRasterImage(mimeType)) {
-      return { finalKey: key, finalUrl: `/uploads/${key}`, finalMimeType: mimeType };
+      let width: number | null = null;
+      let height: number | null = null;
+      try {
+        const sharp = await import('sharp');
+        const meta = await sharp.default(sourceFilePath).metadata();
+        width = meta.width ?? null;
+        height = meta.height ?? null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Failed to extract dimensions for SVG ${key}: ${message}`);
+      }
+      return {
+        finalKey: key,
+        finalUrl: `/uploads/${key}`,
+        finalMimeType: mimeType,
+        width,
+        height,
+      };
     }
 
     const ext = extname(key);
@@ -240,6 +259,8 @@ export class MediaService {
       finalKey,
       finalUrl: `/uploads/${finalKey}`,
       finalMimeType: decision.mimeType,
+      width: decision.width,
+      height: decision.height,
       detailKey,
       detailUrl: `/uploads/${detailKey}`,
       thumbKey,
