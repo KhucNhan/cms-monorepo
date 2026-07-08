@@ -18,7 +18,7 @@ import { RolesGuard, RequirePermissions } from '../auth/guards/roles.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { MediaService, listMediaSchema } from './media.service';
 import { Body, Patch } from '@nestjs/common';
-import { renameMediaSchema } from './media.service';
+import { renameMediaSchema, updateMediaSchema } from './media.service';
 
 @ApiTags('media')
 @ApiBearerAuth()
@@ -40,6 +40,14 @@ export class MediaController {
   async rename(@Param('id') id: string, @Body() body: unknown) {
     const dto = renameMediaSchema.parse(body);
     return this.mediaService.rename(id, dto.name);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('media:update')
+  @ApiOperation({ summary: 'Update media metadata (name and/or altText). Route: PATCH /api/v1/media/:id' })
+  async update(@Param('id') id: string, @Body() body: unknown) {
+    const dto = updateMediaSchema.parse(body);
+    return this.mediaService.update(id, dto);
   }
 
   @Get(':id')

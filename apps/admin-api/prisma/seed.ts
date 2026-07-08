@@ -11,6 +11,7 @@ const ALL_PERMISSIONS = [
   { resource: 'page',  action: 'delete'  },
   { resource: 'page',  action: 'publish' },
   { resource: 'media', action: 'create'  },
+  { resource: 'media', action: 'update'  },
   { resource: 'media', action: 'read'    },
   { resource: 'media', action: 'delete'  },
   { resource: 'user',  action: 'create'  },
@@ -32,6 +33,7 @@ const ROLE_PERMISSIONS: Record<string, Array<{ resource: string; action: string 
     { resource: 'page',  action: 'read'    },
     { resource: 'page',  action: 'update'  },
     { resource: 'media', action: 'create'  },
+    { resource: 'media', action: 'update'  },
     { resource: 'media', action: 'read'    },
     // ── mới: theo yêu cầu "editor view-only users list, view editor's permissions" ──
     { resource: 'user',  action: 'read'    },

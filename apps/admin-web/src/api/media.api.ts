@@ -107,6 +107,18 @@ export const mediaApi = {
       return (payload.data ?? payload) as MediaItem;
     }),
 
+  update: (id: string, body: { name?: string; altText?: string }) =>
+    fetch(`${BASE_URL}/media/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+      body: JSON.stringify(body),
+    }).then(async (res) => {
+      const payload = await res.json();
+      if (!res.ok) throw new ApiClientError(res.status, payload.message ?? 'Update failed', payload);
+      return (payload.data ?? payload) as MediaItem;
+    }),
+
   getUsages: (id: string) =>
     fetch(`${BASE_URL}/media/${id}/usages`, {
       headers: authHeaders({ 'Content-Type': 'application/json' }),

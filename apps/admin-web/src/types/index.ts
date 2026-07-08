@@ -140,6 +140,9 @@ export interface MediaItem {
   detailUrl?: string | null;
   thumbKey?: string | null;
   thumbUrl?: string | null;
+  // ── Metadata bổ sung ──
+  altText?: string | null;   // alt text cho SEO / accessibility
+  fileSize?: number | null;  // kích thước file gốc (bytes) — null với record cũ
 }
 
 export interface MediaFilters {

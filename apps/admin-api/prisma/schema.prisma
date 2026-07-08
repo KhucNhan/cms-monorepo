@@ -148,5 +148,8 @@ model Media {
   width    Int?
   height   Int?
 
+  altText  String?  // alt text cho SEO / accessibility
+  fileSize Int?     // kích thước file gốc user upload (bytes) — null với record cũ trước tính năng này
+  
   @@map("media")
 }

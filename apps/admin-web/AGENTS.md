@@ -15,7 +15,13 @@
 - Block editor mới đăng ký qua `registry.ts`, **không** thêm `switch (block.type)` trong
   `BlockPickerModal.tsx` hay bất kỳ đâu trong app này.
 - **Shadcn Migration**: Các thành phần UI cốt lõi được cấu trúc theo triết lý shadcn. Thư mục `components/ui/` chứa `dialog.tsx` và `select.tsx` (sử dụng radix-ui thuần), các component khác như `Button`, `Input`, `Badge`, `Toast` đã được di chuyển sang dạng CVA (class-variance-authority).
-- **Sidebar thu gọn**: Quản trị bằng `useSidebarStore`. Toggled qua nút menu bên trong `TopNav.tsx`. Các container chính (`AppLayout`, `TopNav`) tự động điều chỉnh chiều rộng dựa trên `isCollapsed`.
+- **Sidebar** (`components/layout/Sidebar.tsx`, state ở `useSidebarStore`):
+  - App title hiển thị **phía trên** danh sách menu (không lồng chung 1 hàng với item đầu tiên) —
+    khi sidebar thu gọn, title tự ẩn/rút gọn theo, không đẩy lệch danh sách menu bên dưới.
+  - Nút toggle thu gọn/mở rộng dùng icon chevron `<`/`>` (tương ứng trạng thái mở/đóng) thay vì
+    icon menu/hamburger mặc định trước đây — để phân biệt rõ đây là hành động "thu gọn sidebar",
+    không phải mở menu. Đặt đồng nhất ở góc trái của `TopNav.tsx`.
+  - Các container chính (`AppLayout`, `TopNav`) tự động điều chỉnh chiều rộng dựa trên `isCollapsed`.
 - **Hợp nhất Lịch sử & Set as Draft**:
   - Không còn trang Version Archive riêng biệt.
   - Panel **History** trong `PageEditPage.tsx` hiển thị tất cả các phiên bản của trang. DRAFT và PUBLISHED luôn ghim lên đầu, tiếp đến là danh sách ARCHIVED.
@@ -33,7 +39,33 @@
     `url` gốc (cũng đã được tối ưu ≤300KB, không phải file thô upload nữa).
   - `detailUrl`/`detailKey` đã có trong response `MediaItem` nhưng **chưa được dùng ở component
     nào** trong app này — dự kiến dùng cho canvas preview Page Editor sau này, chưa làm.
-- **Edit Slug & SEO Metadata**: Cho phép sửa trực tiếp `slug`, `SEO Title`, `SEO Description` ngay trên giao diện chỉnh sửa trang. Các thay đổi này chỉ lưu vào bản DRAFT hiện tại (hoặc fork ra DRAFT mới nếu đang xem bản PUBLISHED) khi bấm **Save Draft**.
+- **Page title (mới)**: `Page` có field `title` riêng (cột thật trong Prisma, không phải
+  `seoMeta.title`) — xem chi tiết ở `apps/admin-api/AGENTS.md` mục "Page Title". Toàn bộ UI trong
+  app này (Content Management list, Page Info section, `CreatePageModal`) đọc/ghi `page.title`
+  trực tiếp, **không** còn suy ra title từ `seoMeta.title` ở bất kỳ đâu.
+- **Content Management List** (`pages/content-management/ContentManagementPage.tsx`):
+  - Bảng danh sách trang chỉ hiển thị **Title** (fallback về `slug` nếu `title` rỗng — page tạo
+    trước migration) và **Slug**, **không** hiển thị `seoMeta.title`/`seoMeta.description` nữa —
+    2 cột "SEO Title"/"SEO Description" cũ đã bị xoá khỏi bảng (kể cả sort field, `FillerRow`
+    `colSpan` đã giảm từ 7 xuống 6 tương ứng số cột thật).
+  - Sort theo tên trang giờ dùng `sortField: 'title'` (so sánh `page.title`), không phải
+    `'seoTitle'` (so sánh `publishedVersion.seoMeta.title`) như bản cũ.
+- **Edit Slug & SEO Metadata → tách 2 section riêng, đều collapsible** (`PageEditPage.tsx`):
+  - **Section "Page Info"**: `title` (Page-level, mới) + `slug`. Có nút collapse riêng
+    (`isPageInfoOpen`), mặc định mở.
+  - **Section "SEO"**: `seoMeta.title` + `seoMeta.description` (PageVersion-level, cần Save Draft
+    mới ghi nhận). Có nút collapse riêng (`isSeoOpen`), mặc định mở, tách biệt hoàn toàn với
+    section Page Info — 2 khối UI/state độc lập, không còn gộp chung 1 card "Page Info" như bản cũ.
+  - Cả 2 section vẫn gộp chung vào 1 request khi bấm **Save Draft**: `title`/`slug` gọi
+    `pagesApi.update()` (cập nhật `Page` trực tiếp, **không** phụ thuộc version DRAFT/PUBLISHED vì
+    `title`/`slug` không versioned), `seoMeta` gọi `pageVersionsApi.updateSeoMeta()` (ghi vào
+    DRAFT version như cũ). Xem `saveAllChanges()` trong `PageEditPage.tsx`.
+- **Page Sections (blocks) — bọc thành 1 card collapsible riêng, cùng kiểu Page Info/SEO**:
+  - Header của card có thể click bất kỳ đâu (trừ nút **Add Block**) để collapse/expand toàn bộ
+    danh sách block (`isBlocksOpen`). Nút Add Block dùng `e.stopPropagation()` để không kích hoạt
+    toggle khi bấm. Icon chevron nằm **cuối cùng** trong header, sau nút Add Block.
+  - Khi mở, nội dung block list nằm trong khung `max-h-[65vh] overflow-y-auto` — tự scroll bên
+    trong, không kéo dài toàn trang / gây scroll toàn cục khi có nhiều block.
 - **Roles & Permissions Page** (`pages/roles/RolesPage.tsx`):
   - Layout 2 cột: danh sách role bên trái (kèm số lượng user đang gán), ma trận permission
     (checkbox nhóm theo `resource`) bên phải.

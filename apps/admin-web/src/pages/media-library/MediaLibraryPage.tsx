@@ -6,7 +6,7 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { useMedia } from '@/hooks/useMedia';
 import { ApiClientError } from '@/api/client';
 import type { MediaItem } from '@/types';
-import {type MediaUsageInfo } from '@/api/media.api';
+import { type MediaUsageInfo } from '@/api/media.api';
 import { Can } from '@/components/Can';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
@@ -30,17 +30,26 @@ interface DeleteTarget {
   usages: MediaUsageInfo[];
 }
 
+/** Format bytes → human-readable KB / MB string. */
+function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export function MediaLibraryPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [mimeFilter, setMimeFilter] = useState<MimeFilter>('all');
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [infoTarget, setInfoTarget] = useState<MediaItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, addToast, removeToast } = useToast();
 
-  const { media, total, loading, error, refetch, checkMediaUsage, deleteMedia, uploadMedia, renameMedia } = useMedia({
+  const { media, total, loading, error, refetch, checkMediaUsage, deleteMedia, uploadMedia, updateMedia } = useMedia({
     page,
     pageSize: PAGE_SIZE,
     search: search.trim() || undefined,
@@ -111,18 +120,21 @@ export function MediaLibraryPage() {
     }
   };
 
-  const handleRename = useCallback(
-    async (id: string, newName: string) => {
+  const handleUpdate = useCallback(
+    async (id: string, body: { name?: string; altText?: string }): Promise<MediaItem> => {
       try {
-        await renameMedia(id, newName);
-        addToast('Renamed successfully', 'success');
+        const updated = await updateMedia(id, body);
+        addToast('Saved successfully', 'success');
+        // Sync infoTarget nếu modal đang mở cho item này
+        setInfoTarget((prev) => (prev?.id === id ? updated : prev));
+        return updated;
       } catch (err) {
-        const msg = err instanceof ApiClientError ? err.message : 'Rename failed.';
+        const msg = err instanceof ApiClientError ? err.message : 'Save failed.';
         addToast(msg, 'error');
         throw err;
       }
     },
-    [renameMedia, addToast],
+    [updateMedia, addToast],
   );
 
   return (
@@ -239,7 +251,7 @@ export function MediaLibraryPage() {
                     key={item.id}
                     item={item}
                     onDelete={() => openDeleteModal(item.id)}
-                    onRename={(newName) => handleRename(item.id, newName)}
+                    onOpen={() => setInfoTarget(item)}
                   />
                 ))}
               </div>
@@ -281,146 +293,280 @@ export function MediaLibraryPage() {
         />
       )}
 
+      {infoTarget && (
+        <MediaInfoModal
+          item={infoTarget}
+          onClose={() => setInfoTarget(null)}
+          onUpdate={(body) => handleUpdate(infoTarget.id, body)}
+        />
+      )}
+
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </AppLayout>
   );
 }
 
 // ─────────────────────────────────────────────
-// MediaCard — with inline rename
+// MediaCard — clickable card opens info modal
 // ─────────────────────────────────────────────
 function MediaCard({
   item,
   onDelete,
-  onRename,
+  onOpen,
 }: {
   item: MediaItem;
   onDelete: () => void;
-  onRename: (newName: string) => Promise<void>;
+  onOpen: () => void;
 }) {
   const isSvg = item.mimeType === 'image/svg+xml';
   const fileName = item.key.split('/').pop() ?? item.key;
 
-  const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(fileName);
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const startRename = () => {
-    setRenameValue(fileName);
-    setRenaming(true);
-    // focus after paint
-    setTimeout(() => inputRef.current?.select(), 0);
-  };
-
-  const cancelRename = () => {
-    setRenaming(false);
-    setRenameValue(fileName);
-  };
-
-  const commitRename = async () => {
-    const trimmed = renameValue.trim();
-    if (!trimmed || trimmed === fileName) {
-      cancelRename();
-      return;
-    }
-    setSaving(true);
-    try {
-      await onRename(trimmed);
-      setRenaming(false);
-    } catch {
-      // toast already shown by parent; revert
-      setRenameValue(fileName);
-      setRenaming(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') commitRename();
-    if (e.key === 'Escape') cancelRename();
-  };
-
   return (
-    <div className="group relative bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <div
+      className="group relative bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onOpen}
+    >
       {/* Thumbnail */}
       <div className="aspect-square bg-surface-container flex items-center justify-center p-sm">
         {isSvg ? (
-          <img src={item.url} alt={fileName} loading="lazy" className="max-w-full max-h-full object-contain" />
+          <img src={item.url} alt={item.altText ?? fileName} loading="lazy" className="max-w-full max-h-full object-contain" />
         ) : (
           // Grid dùng thumbUrl (≤300KB, đã resize nhỏ) thay vì url gốc để giảm băng thông.
           // Fallback về url gốc cho record cũ chưa có thumb (trước khi có tính năng tối ưu này).
           <img
             src={item.thumbUrl ?? item.url}
-            alt={fileName}
+            alt={item.altText ?? fileName}
             loading="lazy"
             className="w-full h-full object-cover"
           />
         )}
       </div>
 
-      {/* Info / rename */}
-      <div className="p-sm min-h-[52px]">
-        {renaming ? (
-          <div className="flex items-center gap-xs">
-            <input
-              ref={inputRef}
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={commitRename}
-              disabled={saving}
-              autoFocus
-              className="flex-1 min-w-0 text-label-sm bg-surface-container border border-primary rounded px-1.5 py-0.5 outline-none text-on-surface"
-            />
-            {saving && (
-              <svg className="animate-spin h-3.5 w-3.5 text-primary shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
-          </div>
-        ) : (
-          <>
-            <p className="text-label-sm text-on-surface truncate" title={fileName}>{fileName}</p>
-            <p className="text-[11px] text-on-surface-variant font-mono truncate">{item.mimeType}</p>
-          </>
-        )}
+      {/* Info */}
+      <div className="p-sm">
+        <p className="text-label-sm text-on-surface truncate" title={fileName}>{fileName}</p>
+        <p className="text-[11px] text-on-surface-variant font-mono truncate">{item.mimeType}</p>
       </div>
 
-      {/* Hover actions */}
-      {!renaming && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs">
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-primary shadow-sm"
-            title="Open in new tab"
+      {/* Hover actions — stop propagation so they don't open the modal */}
+      <div
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-primary shadow-sm"
+          title="Open in new tab"
+        >
+          <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+        </a>
+        <Can permission="media:delete">
+          <button
+            onClick={onDelete}
+            className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-error shadow-sm"
+            title="Delete"
           >
-            <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-          </a>
-          <Can permission="media:create">
-            <button
-              onClick={startRename}
-              className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-secondary shadow-sm"
-              title="Rename"
-            >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
-            </button>
-          </Can>
-          <Can permission="media:delete">
-            <button
-              onClick={onDelete}
-              className="p-1.5 bg-surface/90 rounded-lg text-on-surface-variant hover:text-error shadow-sm"
-              title="Delete"
-            >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
-          </Can>
+            <span className="material-symbols-outlined text-[18px]">delete</span>
+          </button>
+        </Can>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MediaInfoModal — view metadata + edit name/alt
+// ─────────────────────────────────────────────
+function MediaInfoModal({
+  item,
+  onClose,
+  onUpdate,
+}: {
+  item: MediaItem;
+  onClose: () => void;
+  onUpdate: (body: { name?: string; altText?: string }) => Promise<MediaItem>;
+}) {
+  const fileName = item.key.split('/').pop() ?? item.key;
+
+  // Split extension so the input shows only the base name (e.g. "my-photo" not "my-photo.webp")
+  const lastDot = fileName.lastIndexOf('.');
+  const ext = lastDot > 0 ? fileName.slice(lastDot) : '';          // e.g. ".webp"
+  const baseName = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
+
+  const [nameValue, setNameValue] = useState(baseName);
+  const [altValue, setAltValue] = useState(item.altText ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const isDirty = nameValue !== baseName || altValue !== (item.altText ?? '');
+
+  const handleSave = async () => {
+    if (!isDirty) return;
+    setSaving(true);
+    try {
+      const body: { name?: string; altText?: string } = {};
+      // Re-attach extension when sending to the API
+      if (nameValue !== baseName) body.name = `${nameValue.trim()}${ext}`;
+      if (altValue !== (item.altText ?? '')) body.altText = altValue;
+      await onUpdate(body);
+    } catch {
+      // toast already shown by parent
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Close on backdrop click
+  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  // Close on Escape
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  };
+
+  const isSvg = item.mimeType === 'image/svg+xml';
+  const previewSrc = isSvg ? item.url : (item.thumbUrl ?? item.url);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={handleBackdrop}
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
+    >
+      {/* Wide modal — max-w-4xl to fit 2 columns without scrollbar */}
+      <div className="bg-surface rounded-2xl shadow-2xl border border-outline-variant w-full max-w-4xl mx-md overflow-hidden flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-xl pt-xl pb-md shrink-0">
+          <div className="flex items-center gap-sm">
+            <span className="material-symbols-outlined text-primary">image_search</span>
+            <h2 className="text-title-md font-title-md text-on-surface">File Info</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
-      )}
+
+        {/* Two-column body */}
+        <div className="flex gap-xl px-xl pb-xl min-h-0">
+
+          {/* ── Left: image preview only — increased width to w-96 ── */}
+          <div className="w-96 shrink-0">
+            <div className="min-h-[280px] h-full bg-surface-container rounded-xl border border-outline-variant flex items-center justify-center overflow-hidden">
+              <img
+                src={previewSrc}
+                alt={item.altText ?? fileName}
+                className={isSvg ? 'max-w-full max-h-full object-contain p-md' : 'w-full h-full object-contain p-xs'}
+              />
+            </div>
+          </div>
+
+          {/* ── Right: metadata + edit fields ── */}
+          <div className="flex-1 min-w-0 flex flex-col gap-lg">
+
+            {/* Metadata grid */}
+            <div className="grid grid-cols-2 gap-x-lg gap-y-sm">
+              <MetaRow icon="folder" label="Filename" value={fileName} />
+              <MetaRow icon="category" label="Type" value={item.mimeType} mono />
+              <MetaRow
+                icon="aspect_ratio"
+                label="Dimensions"
+                value={item.width && item.height ? `${item.width} × ${item.height} px` : '—'}
+              />
+              <MetaRow icon="data_usage" label="Size" value={formatFileSize(item.fileSize)} />
+            </div>
+
+            <div className="border-t border-outline-variant" />
+
+            {/* Edit fields */}
+            <div className="space-y-md">
+              <h3 className="text-label-lg font-medium text-on-surface">Edit Metadata</h3>
+
+              {/* Name — shows base name without extension; extension is re-appended on save */}
+              <div>
+                <label className="block text-label-sm text-on-surface-variant mb-xs" htmlFor="media-info-name">
+                  Name
+                </label>
+                <div className="flex items-center gap-xs">
+                  <input
+                    id="media-info-name"
+                    type="text"
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    className="flex-1 min-w-0 bg-surface-container border border-outline-variant rounded-lg px-sm py-xs text-body-md text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    placeholder="File name..."
+                  />
+                  {ext && (
+                    <span className="shrink-0 text-body-md text-on-surface-variant font-mono">{ext}</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-xs">
+                  Changing the name also renames the file on disk and updates its URL.
+                </p>
+              </div>
+
+              {/* Alt Text */}
+              <div>
+                <label className="block text-label-sm text-on-surface-variant mb-xs" htmlFor="media-info-alt">
+                  Alt Text
+                </label>
+                <input
+                  id="media-info-alt"
+                  type="text"
+                  value={altValue}
+                  onChange={(e) => setAltValue(e.target.value)}
+                  className="w-full bg-surface-container border border-outline-variant rounded-lg px-sm py-xs text-body-md text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                  placeholder="Describe the image for accessibility..."
+                />
+                <p className="text-[11px] text-on-surface-variant mt-xs">
+                  Used as the <code className="font-mono bg-surface-container px-0.5 rounded">alt</code> attribute when this image is rendered on the public site.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions pushed to bottom of right column */}
+            <div className="flex items-center justify-end gap-sm mt-auto pt-sm border-t border-outline-variant">
+              <Button variant="ghost" onClick={onClose} disabled={saving}>
+                Cancel
+              </Button>
+              <Can permission="media:update">
+                <Button
+                  variant="primary"
+                  onClick={handleSave}
+                  loading={saving}
+                  disabled={!isDirty}
+                >
+                  Save
+                </Button>
+              </Can>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MetaRow — single key/value row in info grid
+// ─────────────────────────────────────────────
+function MetaRow({ icon, label, value, mono = false }: { icon: string; label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[11px] text-on-surface-variant flex items-center gap-1">
+        <span className="material-symbols-outlined text-[13px]">{icon}</span>
+        {label}
+      </span>
+      <span className={`text-body-sm text-on-surface truncate ${mono ? 'font-mono' : ''}`} title={value}>
+        {value}
+      </span>
     </div>
   );
 }

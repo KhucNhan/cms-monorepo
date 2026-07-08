@@ -30,6 +30,17 @@ export const renameMediaSchema = z.object({
 
 export type RenameMediaDto = z.infer<typeof renameMediaSchema>;
 
+export const updateMediaSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255).optional(),
+    altText: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.name !== undefined || d.altText !== undefined, {
+    message: 'At least one of name or altText must be provided.',
+  });
+
+export type UpdateMediaDto = z.infer<typeof updateMediaSchema>;
+
 export interface MediaUsageInfo {
   blockId: string;
   blockType: string;
@@ -138,6 +149,7 @@ export class MediaService {
         key: finalKey,
         url: finalUrl,
         mimeType: finalMimeType,
+        fileSize: stats.size,
         ...variants,
       },
     });
@@ -166,13 +178,32 @@ export class MediaService {
     finalKey: string;
     finalUrl: string;
     finalMimeType: string;
+    width: number | null;
+    height: number | null;
     detailKey?: string;
     detailUrl?: string;
     thumbKey?: string;
     thumbUrl?: string;
   }> {
     if (!isRasterImage(mimeType)) {
-      return { finalKey: key, finalUrl: `/uploads/${key}`, finalMimeType: mimeType };
+      let width: number | null = null;
+      let height: number | null = null;
+      try {
+        const sharp = await import('sharp');
+        const meta = await sharp.default(sourceFilePath).metadata();
+        width = meta.width ?? null;
+        height = meta.height ?? null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Failed to extract dimensions for SVG ${key}: ${message}`);
+      }
+      return {
+        finalKey: key,
+        finalUrl: `/uploads/${key}`,
+        finalMimeType: mimeType,
+        width,
+        height,
+      };
     }
 
     const ext = extname(key);
@@ -228,6 +259,8 @@ export class MediaService {
       finalKey,
       finalUrl: `/uploads/${finalKey}`,
       finalMimeType: decision.mimeType,
+      width: decision.width,
+      height: decision.height,
       detailKey,
       detailUrl: `/uploads/${detailKey}`,
       thumbKey,
@@ -277,6 +310,68 @@ export class MediaService {
     }
 
     return this.prisma.media.update({ where: { id }, data });
+  }
+
+  /**
+   * Update metadata (name và/hoặc altText) trong 1 lần ghi DB duy nhất.
+   *
+   * - Nếu `dto.name` có: chạy toàn bộ rename logic (sanitize → unique key → rename file vật lý)
+   *   để tính bộ `key`/`url`/`detailKey`/... mới — nhưng KHÔNG ghi DB trong rename, chỉ build `data`.
+   *   Sau đó merge `altText` (nếu có) vào `data` cùng lúc, gọi `prisma.media.update()` 1 lần.
+   * - Nếu chỉ `dto.altText`: cập nhật 1 field, 1 round-trip DB.
+   */
+  async update(id: string, dto: UpdateMediaDto) {
+    const media = await this.findOne(id);
+    const updateData: Record<string, string | null> = {};
+
+    if (dto.name !== undefined) {
+      const ext = extname(media.key);
+      const rawBase = this.stripExtension(dto.name, ext);
+      const sanitizedBase = this.sanitizeFilename(rawBase);
+      if (!sanitizedBase) {
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Tên file không hợp lệ sau khi chuẩn hoá.',
+        });
+      }
+
+      const newKey = await this.generateUniqueKey(`${sanitizedBase}${ext}`, ext, id);
+      if (newKey !== media.key) {
+        const oldBase = media.key.replace(ext, '');
+        const newBase = newKey.replace(ext, '');
+
+        // Rename file vật lý (filesystem only — không phải DB write)
+        this.renamePhysicalFile(media.key, newKey);
+        updateData.key = newKey;
+        updateData.url = `/uploads/${newKey}`;
+
+        if (media.detailKey) {
+          const newDetailKey = media.detailKey.replace(oldBase, newBase);
+          this.renamePhysicalFile(media.detailKey, newDetailKey);
+          updateData.detailKey = newDetailKey;
+          updateData.detailUrl = `/uploads/${newDetailKey}`;
+        }
+        if (media.thumbKey) {
+          const newThumbKey = media.thumbKey.replace(oldBase, newBase);
+          this.renamePhysicalFile(media.thumbKey, newThumbKey);
+          updateData.thumbKey = newThumbKey;
+          updateData.thumbUrl = `/uploads/${newThumbKey}`;
+        }
+      }
+    }
+
+    if (dto.altText !== undefined) {
+      // Cho phép xoá altText bằng chuỗi rỗng (lưu null vào DB)
+      updateData.altText = dto.altText.trim() || null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      // Không có gì thay đổi (ví dụ name trùng key cũ, altText không có)
+      return media;
+    }
+
+    // 1 lần write DB duy nhất — tránh 2 round-trip và race condition
+    return this.prisma.media.update({ where: { id }, data: updateData });
   }
 
   private renamePhysicalFile(oldKey: string, newKey: string) {

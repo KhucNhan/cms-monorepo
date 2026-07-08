@@ -60,12 +60,48 @@
 - Người dùng có thể chỉnh sửa trực tiếp thuộc tính `slug` của trang và metadata SEO (`seoMeta.title`, `seoMeta.description`) ngay trong giao diện chỉnh sửa trang (PageEditPage).
 - Thay đổi này được lưu trữ đồng bộ cùng với các khối nội dung khi người dùng lưu bản nháp (**Save Draft**).
 - Thay đổi slug/metadata SEO sẽ chuyển trạng thái của trang thành DRAFT, và chỉ chính thức áp dụng lên môi trường public sau khi được nhấn **Publish**.
+- **Cập nhật: tách "Page Info" thành 2 section UI độc lập, đều collapsible** — một cho
+  `title`/`slug` (Page-level), một cho `seoMeta.title`/`seoMeta.description` (PageVersion-level).
+  Lý do tách: 2 nhóm field này có **vòng đời lưu khác nhau về bản chất** (xem mục 6 bên dưới) — gộp
+  chung 1 card trước đây khiến người dùng lầm tưởng cả 2 đều chỉ áp dụng sau khi Publish, trong khi
+  `title` thực ra áp dụng ngay. Tách UI giúp lộ rõ ranh giới đó, dù cả 2 vẫn cùng được gửi trong 1
+  lần bấm Save Draft để giữ trải nghiệm 1-click.
 
 ### 5. Giao diện thu gọn thanh bên (Collapsible Sidebar)
 
 - Sidebar của admin panel hỗ trợ cơ chế collapse/expand để tối đa hóa không gian thao tác nội dung.
 - Quản lý trạng thái thông qua Zustand store trung tâm (`useSidebarStore`) để đồng bộ mượt mà chiều rộng của cả sidebar và khung nội dung chính (TopNav và AppLayout).
 - Nút kích hoạt toggle thu gọn được đặt đồng nhất ở vị trí góc trái của thanh điều hướng phía trên (TopNav).
+- **Cập nhật**: title của app được đặt cố định phía trên danh sách menu (không chung hàng với item
+  đầu tiên) để làm mốc nhận diện khi sidebar mở, và icon toggle đổi thành chevron `<`/`>` thay vì
+  icon hamburger mặc định — lý do: hamburger dễ bị hiểu nhầm là "mở menu con" thay vì "thu gọn toàn
+  bộ sidebar", trong khi `<`/`>` thể hiện trực quan hướng thu/giãn của chính sidebar.
+
+### 6. Page Title — field mới, tách biệt SEO title (bổ sung sau đợt review Content Management List)
+
+- **Vấn đề trước khi có field này**: `Page` không có tên hiển thị riêng — mọi nơi cần "tên trang"
+  (Content Management list, Navbar public site) đều phải mượn tạm `seoMeta.title` (vốn có mục đích
+  khác: nội dung thẻ `<title>` cho SEO/social share) hoặc fallback về `slug`. Điều này khiến 2 khái
+  niệm khác nhau — "tên hiển thị nội bộ để admin nhận diện trang" và "tiêu đề SEO công khai" — bị
+  trộn lẫn vào 1 field, không cho phép khác nhau khi cần (ví dụ tên nội bộ ngắn gọn "Trang chủ" nhưng
+  SEO title dài hơn "Trang chủ | CMS Site — Giải pháp quản trị nội dung").
+- **Quyết định thiết kế**: thêm cột `Page.title` (scalar, không versioned) — sống ở `Page`, tách
+  biệt hoàn toàn khỏi `PageVersion.seoMeta.title`. Do nằm ở `Page` (không phải `PageVersion`), field
+  này **không đi qua vòng đời DRAFT/PUBLISHED** như `seoMeta` — update ngay lập tức, không cần
+  Publish. Đây là đánh đổi có chủ đích: `title` được xem như metadata quản trị (giống `slug`), không
+  phải "nội dung xuất bản" cần kiểm duyệt qua version.
+  - Hệ quả cần biết: sửa `title` rồi chỉ bấm "Save Draft" (chưa Publish) vẫn khiến `title` mới hiển
+    thị ngay trên Content Management list và (gián tiếp, qua fallback) trên `public-pages`
+    endpoint — khác hẳn hành vi của `seoMeta`, vốn chỉ lộ ra sau Publish. Nếu sau này có yêu cầu
+    `title` cũng phải versioned/chờ Publish giống `seoMeta`, đó là thay đổi kiến trúc (di chuyển
+    `title` sang `PageVersion`), không phải bugfix.
+- **Navbar (`apps/web`) chủ động KHÔNG dùng `Page.title`** — quyết định sản phẩm riêng: nhãn menu
+  công khai luôn suy ra từ `slug` (hàm `slugToLabel()`), độc lập hoàn toàn với việc admin sửa
+  `title` ở CMS. Lý do: tách bạch "tên quản trị nội bộ" khỏi "nhãn điều hướng công khai" — tránh
+  trường hợp admin đổi `title` cho mục đích nội bộ (vd phân loại, ghi chú) nhưng vô tình làm đổi
+  luôn menu mà người dùng cuối đang thấy. `public-pages.controller.ts` vẫn trả `title` trong response
+  (ưu tiên `page.title` → `seoMeta.title` → `slug`) để các consumer khác của `apps/web` (nếu có, vd
+  trang chi tiết, sitemap) có thể dùng khi cần — chỉ riêng `Navbar` chủ động bỏ qua field này.
 
 ### TODO — thiếu nguồn
 
