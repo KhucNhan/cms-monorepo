@@ -3,11 +3,11 @@ import { BlockRenderer } from '@/components/blocks';
 import { getPageBySlug } from '@/lib/pages';
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string, title: string }>;
 }
 
 export default async function Page({ params }: PageProps) {
-  const { slug } = await params;
+  const { slug, title } = await params;
   const page = await getPageBySlug(slug);
   if (!page) notFound();
 

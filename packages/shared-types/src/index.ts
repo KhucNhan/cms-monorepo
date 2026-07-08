@@ -80,6 +80,7 @@ export type VersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export interface Page {
   id: string;
   slug: string;
+  title: string;
   publishedVersionId: string | null;
   createdAt: string;
 }

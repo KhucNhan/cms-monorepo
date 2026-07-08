@@ -82,6 +82,7 @@ model User {
 model Page {
   id        String   @id @default(uuid())
   slug      String   @unique
+  title     String   @default("")
   createdAt DateTime @default(now())
 
   // Con trỏ sang version đang live (null = chưa publish lần nào)

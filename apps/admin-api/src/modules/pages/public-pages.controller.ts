@@ -24,6 +24,7 @@ export class PublicPagesController {
       select: {
         id: true,
         slug: true,
+        title: true,
         publishedVersion: { select: { seoMeta: true } },
       },
     });
@@ -33,7 +34,9 @@ export class PublicPagesController {
       return {
         id: page.id,
         slug: page.slug,
-        title: (seoMeta['title'] as string | undefined) ?? page.slug,
+        // Ưu tiên Page.title (tên hiển thị thật) — seoMeta.title chỉ để làm fallback cho
+        // các page tạo trước khi có cột title, cuối cùng mới fallback về slug.
+        title: page.title || (seoMeta['title'] as string | undefined) || page.slug,
       };
     });
   }
@@ -70,7 +73,9 @@ export class PublicPagesController {
     return {
       id: page.id,
       slug: page.slug,
-      title: (seoMeta['title'] as string | undefined) ?? page.slug,
+      // Ưu tiên Page.title thật, seoMeta.title chỉ dùng cho thẻ <title>/SEO description riêng
+      // (đã trả nguyên seoMeta bên dưới cho FE tự dùng khi cần render <head>).
+      title: page.title || (seoMeta['title'] as string | undefined) || page.slug,
       seoMeta,
       blocks,
     };

@@ -19,10 +19,10 @@ export function ContentManagementPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   // null = mặc định (giữ nguyên thứ tự trả về từ server); khi bấm cột thì sort client-side
   // trên tập dữ liệu của TRANG HIỆN TẠI (server chỉ hỗ trợ search, chưa hỗ trợ sort).
-  const [sortField, setSortField] = useState<'seoTitle' | 'status' | 'updatedAt' | null>(null);
+  const [sortField, setSortField] = useState<'title' | 'status' | 'updatedAt' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const handleSortClick = (field: 'seoTitle' | 'status' | 'updatedAt') => {
+  const handleSortClick = (field: 'title' | 'status' | 'updatedAt') => {
     if (sortField !== field) {
       setSortField(field);
       setSortDir('asc');
@@ -63,9 +63,9 @@ export function ContentManagementPage() {
     }
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...pages].sort((a, b) => {
-      if (sortField === 'seoTitle') {
-        const av = (a.publishedVersion as unknown as { seoMeta?: { title?: string } } | undefined)?.seoMeta?.title ?? '';
-        const bv = (b.publishedVersion as unknown as { seoMeta?: { title?: string } } | undefined)?.seoMeta?.title ?? '';
+      if (sortField === 'title') {
+        const av = a.title ?? '';
+        const bv = b.title ?? '';
         return av.localeCompare(bv) * dir;
       }
       if (sortField === 'status') {
@@ -164,9 +164,9 @@ export function ContentManagementPage() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
-                      {['SEO Title', 'SEO Description', 'Slug', 'Status', 'Versions', 'Last Updated', 'Action'].map((h, i, arr) => {
+                      {['Title', 'Slug', 'Status', 'Versions', 'Last Updated', 'Action'].map((h, i, arr) => {
                         const sortableField =
-                          h === 'SEO Title' ? 'seoTitle' : h === 'Status' ? 'status' : h === 'Last Updated' ? 'updatedAt' : null;
+                          h === 'Title' ? 'title' : h === 'Status' ? 'status' : h === 'Last Updated' ? 'updatedAt' : null;
                         return (
                           <th
                             key={h}
@@ -287,23 +287,16 @@ function PageRow({
   const versionCount = page._count?.versions ?? 0;
   const cfg = STATUS_CONFIG[status as VersionStatus] ?? STATUS_CONFIG.DRAFT;
 
-  const seoMeta = (page.publishedVersion as unknown as { seoMeta?: { title?: string; description?: string } } | undefined)?.seoMeta;
-  const seoTitle = seoMeta?.title ?? '—';
-  const seoDescription = seoMeta?.description ?? '—';
+  const displayTitle = page.title?.trim() || page.slug;
 
   return (
     <tr
       onClick={onEdit}
       className="hover:bg-primary/5 transition-colors group cursor-pointer"
     >
-      {/* SEO Title */}
-      <td className="p-md text-body-md text-on-surface-variant max-w-[200px] truncate">
-        {seoTitle}
-      </td>
-
-      {/* SEO Description */}
-      <td className="p-md text-body-md text-on-surface-variant max-w-[260px] truncate">
-        {seoDescription}
+      {/* Title */}
+      <td className="p-md text-body-md text-on-background font-medium max-w-[220px] truncate">
+        {displayTitle}
       </td>
 
       {/* Slug */}
@@ -356,7 +349,7 @@ function PageRow({
 function FillerRow() {
   return (
     <tr aria-hidden="true" className="pointer-events-none h-[74.133px]">
-      <td className="p-md" colSpan={7}>
+      <td className="p-md" colSpan={6}>
         <span className="invisible text-body-md">&nbsp;</span>
       </td>
     </tr>
