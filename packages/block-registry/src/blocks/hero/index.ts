@@ -6,6 +6,7 @@ export const heroBlock: BlockDefinition<typeof heroSchema> = {
   label: 'Hero Section',
   icon: 'LayoutTemplate',
   schema: heroSchema,
+  thumbnail: '/block-thumbnails/hero.png',
   defaultData: {
     title: 'Your compelling headline here',
     subtitle: 'Supporting text that adds context',

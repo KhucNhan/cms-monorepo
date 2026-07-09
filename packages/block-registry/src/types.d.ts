@@ -5,6 +5,7 @@ export interface BlockDefinition<S extends ZodSchema = ZodSchema> {
     icon: string;
     schema: S;
     defaultData: z.infer<S>;
+    thumbnail?: string;
     Editor?: any;
     Renderer?: any;
 }

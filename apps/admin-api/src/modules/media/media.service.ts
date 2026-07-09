@@ -65,12 +65,34 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
   private readonly uploadDir: string;
+  /**
+   * Base URL tuyệt đối của admin-api (vd: https://api.khucnhan.io.vn), dùng để build
+   * `url`/`detailUrl`/`thumbUrl` tuyệt đối thay vì relative `/uploads/...`.
+   *
+   * Lý do bắt buộc phải tuyệt đối: relative path chỉ "vô tình" hoạt động bên trong
+   * admin-web khi Vite dev proxy đang forward /uploads sang :3001. Ở `vite preview`
+   * (bản build production) proxy KHÔNG hoạt động, và khi user "Open in new tab" là
+   * browser điều hướng thẳng vào domain admin-web (không qua JS runtime) — server đó
+   * không có route /uploads/*, rơi vào SPA catch-all -> redirect /dashboard.
+   * Absolute URL trỏ thẳng domain admin-api thì luôn đúng bất kể context truy cập.
+   *
+   * Không set biến này -> fallback rỗng, giữ hành vi relative cũ (chỉ nên dùng cho
+   * local dev nếu chưa cấu hình .env).
+   */
+  private readonly uploadPublicBaseUrl: string;
 
   constructor(private readonly prisma: PrismaService) {
     this.uploadDir = join(process.cwd(), 'uploads');
     if (!existsSync(this.uploadDir)) {
       mkdirSync(this.uploadDir, { recursive: true });
     }
+    // Bỏ dấu "/" cuối nếu có, tránh double-slash khi nối với "/uploads/<key>"
+    this.uploadPublicBaseUrl = (process.env.API_PUBLIC_URL ?? '').replace(/\/+$/, '');
+  }
+
+  /** Sinh URL public cho 1 file trong uploadDir — dùng ở MỌI nơi thay vì viết tay `/uploads/${key}`. */
+  private buildUrl(key: string): string {
+    return `${this.uploadPublicBaseUrl}/uploads/${key}`;
   }
 
   async findAll(params: ListMediaDto) {
@@ -199,7 +221,7 @@ export class MediaService {
       }
       return {
         finalKey: key,
-        finalUrl: `/uploads/${key}`,
+        finalUrl: this.buildUrl(key),
         finalMimeType: mimeType,
         width,
         height,
@@ -257,14 +279,14 @@ export class MediaService {
 
     return {
       finalKey,
-      finalUrl: `/uploads/${finalKey}`,
+      finalUrl: this.buildUrl(finalKey),
       finalMimeType: decision.mimeType,
       width: decision.width,
       height: decision.height,
       detailKey,
-      detailUrl: `/uploads/${detailKey}`,
+      detailUrl: this.buildUrl(detailKey),
       thumbKey,
-      thumbUrl: `/uploads/${thumbKey}`,
+      thumbUrl: this.buildUrl(thumbKey),
     };
   }
 
@@ -294,19 +316,19 @@ export class MediaService {
     const newBase = newKey.replace(ext, '');
 
     this.renamePhysicalFile(media.key, newKey);
-    const data: Record<string, string> = { key: newKey, url: `/uploads/${newKey}` };
+    const data: Record<string, string> = { key: newKey, url: this.buildUrl(newKey) };
 
     if (media.detailKey) {
       const newDetailKey = media.detailKey.replace(oldBase, newBase);
       this.renamePhysicalFile(media.detailKey, newDetailKey);
       data.detailKey = newDetailKey;
-      data.detailUrl = `/uploads/${newDetailKey}`;
+      data.detailUrl = this.buildUrl(newDetailKey);
     }
     if (media.thumbKey) {
       const newThumbKey = media.thumbKey.replace(oldBase, newBase);
       this.renamePhysicalFile(media.thumbKey, newThumbKey);
       data.thumbKey = newThumbKey;
-      data.thumbUrl = `/uploads/${newThumbKey}`;
+      data.thumbUrl = this.buildUrl(newThumbKey);
     }
 
     return this.prisma.media.update({ where: { id }, data });
@@ -343,19 +365,19 @@ export class MediaService {
         // Rename file vật lý (filesystem only — không phải DB write)
         this.renamePhysicalFile(media.key, newKey);
         updateData.key = newKey;
-        updateData.url = `/uploads/${newKey}`;
+        updateData.url = this.buildUrl(newKey);
 
         if (media.detailKey) {
           const newDetailKey = media.detailKey.replace(oldBase, newBase);
           this.renamePhysicalFile(media.detailKey, newDetailKey);
           updateData.detailKey = newDetailKey;
-          updateData.detailUrl = `/uploads/${newDetailKey}`;
+          updateData.detailUrl = this.buildUrl(newDetailKey);
         }
         if (media.thumbKey) {
           const newThumbKey = media.thumbKey.replace(oldBase, newBase);
           this.renamePhysicalFile(media.thumbKey, newThumbKey);
           updateData.thumbKey = newThumbKey;
-          updateData.thumbUrl = `/uploads/${newThumbKey}`;
+          updateData.thumbUrl = this.buildUrl(newThumbKey);
         }
       }
     }
