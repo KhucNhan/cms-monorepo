@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getAllBlockDefinitions } from '@cms/block-registry';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { cn } from '@/config/cn';
 
 interface BlockPickerModalProps {
   onSelect: (type: string) => void;
@@ -68,7 +69,7 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
         </div>
 
         <div className="flex gap-lg flex-1 min-h-0">
-          <div className="grid grid-cols-2 max-w-[300px] gap-sm flex-1 overflow-y-auto content-start pr-1">
+          <div className="grid grid-cols-2 max-w-[300px] gap-sm flex-1 overflow-y-auto content-start pr-1 p-1">
             {filteredDefinitions.length === 0 ? (
               <div className="col-span-2 flex flex-col items-center justify-center gap-sm py-2xl text-on-surface-variant">
                 <span className="material-symbols-outlined text-[32px] opacity-50">search_off</span>
@@ -78,32 +79,56 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
               filteredDefinitions.map((def) => {
                 const materialIcon = ICON_MAP[def.icon] ?? ICON_MAP[def.type] ?? 'widgets';
                 return (
-                  <button
+                  <div
                     key={def.type}
-                    onClick={() => onSelect(def.type)}
-                    onMouseEnter={() => setPreviewType(def.type)}
-                    onMouseLeave={() => setPreviewType((cur) => (cur === def.type ? null : cur))}
-                    onFocus={() => setPreviewType(def.type)}
-                    className="flex flex-col items-center gap-sm p-lg border border-outline-variant hover:border-primary hover:bg-primary/5 rounded-xl transition-all text-center group"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setPreviewType(def.type)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setPreviewType(def.type);
+                    }}
+                    className={cn(
+                      'flex flex-col items-center gap-sm p-lg border rounded-xl transition-all text-center group cursor-pointer',
+                      previewType === def.type
+                        ? 'ring-2 ring-primary/40 bg-primary/5 shadow-md'
+                        : 'border-outline-variant hover:bg-primary/5',
+                    )}
                   >
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden group-hover:scale-110 transition-transform">
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden transition-all',
+                        previewType === def.type
+                          ? 'scale-110'
+                          : 'group-hover:scale-110',
+                      )}
+                    >
                       {def.thumbnail ? (
                         <img
                           src={def.thumbnail}
                           alt={def.label}
-                          className="w-full h-full object-cover"
+                          className={cn(
+                            'w-full h-full object-cover transition-all',
+                            previewType !== def.type,
+                          )}
                         />
                       ) : (
                         <span className="material-symbols-outlined text-primary text-[24px]">{materialIcon}</span>
                       )}
                     </div>
-                    <div>
+                    <div className="flex flex-col items-center gap-xs">
                       <p className="text-label-md font-bold text-on-surface">{def.label}</p>
-                      <p className="text-[10px] text-on-surface-variant mt-xs opacity-75 capitalize">
-                        {def.type.replace('-', ' ')}
-                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(def.type);
+                        }}
+                        className="mt-xs px-md py-1 rounded-lg bg-primary text-on-primary text-[11px] font-bold shadow-sm hover:bg-primary/90 active:scale-95 transition-all"
+                      >
+                        Select
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -119,7 +144,7 @@ export function BlockPickerModal({ onSelect, onCancel }: BlockPickerModalProps) 
               />
             ) : (
               <p className="text-[10px] text-on-surface-variant text-center px-sm opacity-60">
-                Hover a block to preview
+                Click a block to preview it here
               </p>
             )}
           </div>
