@@ -21,6 +21,7 @@ export interface BlockDefinition<S extends ZodSchema = ZodSchema> {
   icon: string; // tên icon (Lucide), admin-web resolve component
   schema: S;
   defaultData: z.infer<S>;
+  thumbnail?: string;
   // Editor và Renderer được khai báo là `any` ở đây để tránh
   // import React types vào package schema-only.
   // Từng app tự cast về đúng component type khi dùng.

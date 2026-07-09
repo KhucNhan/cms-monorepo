@@ -202,7 +202,7 @@ export class AuthService {
 
       // Step 4: Issue tokens (reuse existing loginWithGoogle)
       return this.loginWithGoogle(user as any);
-    } catch (err: unknown) {
+    } catch (err) {
       if (axios.isAxiosError(err)) {
         this.logger.error(
           `Google OAuth API error: ${err.response?.status} ${err.response?.statusText}`,

@@ -6,6 +6,7 @@ export const richTextBlock: BlockDefinition<typeof richTextSchema> = {
   label: 'Rich Text',
   icon: 'FileText',
   schema: richTextSchema,
+  thumbnail: '/block-thumbnails/rich-text.png',
   defaultData: {
     content: {
       type: 'doc',
