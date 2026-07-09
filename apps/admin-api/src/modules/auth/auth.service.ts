@@ -100,6 +100,34 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
+  async loginWithGoogle(user: {
+    id: string;
+    email: string;
+    roleId: string;
+    role: { rolePermissions: Array<{ permission: { resource: string; action: string } }> };
+  }) {
+    const permissions = this.buildPermissions(user.role.rolePermissions);
+
+    const payload: JwtPayload = {
+      sub:         user.id,
+      email:       user.email,
+      roleId:      user.roleId,
+      permissions,
+    };
+
+    const accessToken  = this.signAccessToken(payload);
+    const refreshToken = this.signRefreshToken(user.id);
+
+    const refreshHash = await bcrypt.hash(refreshToken, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data:  { refreshTokenHash: refreshHash },
+    });
+
+    this.logger.log(`Google Login: ${user.email}`);
+    return { accessToken, refreshToken };
+  }
+
   async refreshTokens(userId: string, rawRefreshToken: string) {
     const user = await this.getUserWithPermissions(userId);
 

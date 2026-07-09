@@ -1,131 +1,155 @@
 # AGENTS.md — apps/admin-web
 
-> Đọc `/AGENTS.md` (root) trước nếu chưa đọc.
+> Read `/AGENTS.md` (root) first. This file only covers conventions specific to `admin-web`.
 
-## Quy ước riêng app này
+## 1. Mandatory rules
 
-- **State**: dữ liệu server → TanStack Query (`hooks/use*.ts`). State UI thuần (block đang chọn,
-  panel mở, cờ dirty) → Zustand (`editor.store.ts`, `sidebar.store.ts`). **Không** đẩy dữ liệu server vào Zustand store.
-- **Chưa có `packages/ui`** — token màu Material You định nghĩa trực tiếp trong
-  `tailwind.config.js` của app này. Đừng import từ `@cms/ui`, package đó chưa tồn tại.
-- **Tailwind v3.4** (CommonJS `tailwind.config.js`, `theme.extend`) — không dùng cú pháp `@theme`
-  của v4.
-- **`@cms/block-registry` alias thẳng vào `src/`** qua `vite.config.ts` (`resolve.alias`) — sửa
-  block-registry không cần build lại, chỉ cần refresh dev server.
-- Block editor mới đăng ký qua `registry.ts`, **không** thêm `switch (block.type)` trong
-  `BlockPickerModal.tsx` hay bất kỳ đâu trong app này.
-- **Shadcn Migration**: Các thành phần UI cốt lõi được cấu trúc theo triết lý shadcn. Thư mục `components/ui/` chứa `dialog.tsx` và `select.tsx` (sử dụng radix-ui thuần), các component khác như `Button`, `Input`, `Badge`, `Toast` đã được di chuyển sang dạng CVA (class-variance-authority).
-- **Sidebar** (`components/layout/Sidebar.tsx`, state ở `useSidebarStore`):
-  - App title hiển thị **phía trên** danh sách menu (không lồng chung 1 hàng với item đầu tiên) —
-    khi sidebar thu gọn, title tự ẩn/rút gọn theo, không đẩy lệch danh sách menu bên dưới.
-  - Nút toggle thu gọn/mở rộng dùng icon chevron `<`/`>` (tương ứng trạng thái mở/đóng) thay vì
-    icon menu/hamburger mặc định trước đây — để phân biệt rõ đây là hành động "thu gọn sidebar",
-    không phải mở menu. Đặt đồng nhất ở góc trái của `TopNav.tsx`.
-  - Các container chính (`AppLayout`, `TopNav`) tự động điều chỉnh chiều rộng dựa trên `isCollapsed`.
-- **Hợp nhất Lịch sử & Set as Draft**:
-  - Không còn trang Version Archive riêng biệt.
-  - Panel **History** trong `PageEditPage.tsx` hiển thị tất cả các phiên bản của trang. DRAFT và PUBLISHED luôn ghim lên đầu, tiếp đến là danh sách ARCHIVED.
-  - DRAFT và ARCHIVED hỗ trợ xóa trực tiếp.
-  - Phím **Set as Draft** (thay thế Revert) trên phiên bản ARCHIVED sẽ ghi đè (xóa) DRAFT hiện tại nếu có và tạo ra bản DRAFT mới clone từ phiên bản được chọn.
-- **Thư viện ảnh**:
-  - Grid phân trang `PAGE_SIZE = 12` (2 dòng, mỗi dòng 6 ảnh).
-  - Tên ảnh cho phép nhấp đúp/chỉnh sửa trực tiếp (Inline Rename).
-  - Khi xóa ảnh, hệ thống gọi API check usage (`mediaService.getUsages`) quét đệ quy thuộc tính `mediaId` ở mọi block của mọi `pageVersion` (không quan trọng status là gì) và bắt buộc đưa ra cảnh báo chi tiết trước khi xóa.
-  - **Media Optimization (mới)**: mỗi ảnh raster upload (trừ SVG) được BE sinh sẵn 3 biến thể WebP
-    ≤300KB — `original`, `detail`, `thumb` (xem chi tiết thuật toán ở `apps/admin-api/AGENTS.md`
-    mục "Media Optimization"). Grid trong `MediaLibraryPage.tsx` render `<img src={item.thumbUrl ??
-    item.url} loading="lazy" />` — ưu tiên `thumbUrl`, fallback về `url` gốc cho record cũ (upload
-    trước khi có tính năng này, `thumbUrl` sẽ là `null`). Nút xem chi tiết/"mở tab mới" vẫn dùng
-    `url` gốc (cũng đã được tối ưu ≤300KB, không phải file thô upload nữa).
-  - `detailUrl`/`detailKey` đã có trong response `MediaItem` nhưng **chưa được dùng ở component
-    nào** trong app này — dự kiến dùng cho canvas preview Page Editor sau này, chưa làm.
-- **Page title (mới)**: `Page` có field `title` riêng (cột thật trong Prisma, không phải
-  `seoMeta.title`) — xem chi tiết ở `apps/admin-api/AGENTS.md` mục "Page Title". Toàn bộ UI trong
-  app này (Content Management list, Page Info section, `CreatePageModal`) đọc/ghi `page.title`
-  trực tiếp, **không** còn suy ra title từ `seoMeta.title` ở bất kỳ đâu.
-- **Content Management List** (`pages/content-management/ContentManagementPage.tsx`):
-  - Bảng danh sách trang chỉ hiển thị **Title** (fallback về `slug` nếu `title` rỗng — page tạo
-    trước migration) và **Slug**, **không** hiển thị `seoMeta.title`/`seoMeta.description` nữa —
-    2 cột "SEO Title"/"SEO Description" cũ đã bị xoá khỏi bảng (kể cả sort field, `FillerRow`
-    `colSpan` đã giảm từ 7 xuống 6 tương ứng số cột thật).
-  - Sort theo tên trang giờ dùng `sortField: 'title'` (so sánh `page.title`), không phải
-    `'seoTitle'` (so sánh `publishedVersion.seoMeta.title`) như bản cũ.
-- **Edit Slug & SEO Metadata → tách 2 section riêng, đều collapsible** (`PageEditPage.tsx`):
-  - **Section "Page Info"**: `title` (Page-level, mới) + `slug`. Có nút collapse riêng
-    (`isPageInfoOpen`), mặc định mở.
-  - **Section "SEO"**: `seoMeta.title` + `seoMeta.description` (PageVersion-level, cần Save Draft
-    mới ghi nhận). Có nút collapse riêng (`isSeoOpen`), mặc định mở, tách biệt hoàn toàn với
-    section Page Info — 2 khối UI/state độc lập, không còn gộp chung 1 card "Page Info" như bản cũ.
-  - Cả 2 section vẫn gộp chung vào 1 request khi bấm **Save Draft**: `title`/`slug` gọi
-    `pagesApi.update()` (cập nhật `Page` trực tiếp, **không** phụ thuộc version DRAFT/PUBLISHED vì
-    `title`/`slug` không versioned), `seoMeta` gọi `pageVersionsApi.updateSeoMeta()` (ghi vào
-    DRAFT version như cũ). Xem `saveAllChanges()` trong `PageEditPage.tsx`.
-- **Page Sections (blocks) — bọc thành 1 card collapsible riêng, cùng kiểu Page Info/SEO**:
-  - Header của card có thể click bất kỳ đâu (trừ nút **Add Block**) để collapse/expand toàn bộ
-    danh sách block (`isBlocksOpen`). Nút Add Block dùng `e.stopPropagation()` để không kích hoạt
-    toggle khi bấm. Icon chevron nằm **cuối cùng** trong header, sau nút Add Block.
-  - Khi mở, nội dung block list nằm trong khung `max-h-[65vh] overflow-y-auto` — tự scroll bên
-    trong, không kéo dài toàn trang / gây scroll toàn cục khi có nhiều block.
-- **Roles & Permissions Page** (`pages/roles/RolesPage.tsx`):
-  - Layout 2 cột: danh sách role bên trái (kèm số lượng user đang gán), ma trận permission
-    (checkbox nhóm theo `resource`) bên phải.
-  - **Không dùng modal riêng** cho tạo/sửa permission — khác với `SettingsPage.tsx` (users) vốn
-    dùng `UserFormModal`. Rename role và cấp permission là 2 hành động UI riêng biệt trong cùng 1
-    panel, khớp với 2 endpoint backend tách biệt (`PATCH /roles/:id` vs `PATCH /roles/:id/permissions`).
-  - Quyền `canManage` giờ tính qua `usePermissions().can('role:update')` (xem mục RBAC frontend bên
-    dưới), không còn tự `useMemo` đọc thẳng `user.permissions.includes(...)` như bản cũ.
-  - Hook `useRoles.ts` dùng `useState`/`useEffect`/`useCallback` thuần, **không dùng
-    `@tanstack/react-query`** — thư viện này không có trong `package.json` của `admin-web`. Toàn bộ
-    hook data-fetching trong app (`useMedia.ts`, `useUsers.ts`, `useRoles.ts`) đều theo pattern này,
-    tự quản lý state cục bộ, không có cache/invalidate tự động giữa các tab.
-  - `roles.api.ts`: `Role.permissions` là `Permission[]` (object `{id, resource, action}`), khác
-    hoàn toàn với thiết kế nháp ban đầu (`string[]`) — nhớ đúng shape khi sửa code liên quan.
+| Rule | Detail |
+|---|---|
+| Server state vs UI state | Server data → TanStack Query (`hooks/use*.ts`). Pure UI state (selected block, panel open, dirty flag) → Zustand (`editor.store.ts`, `sidebar.store.ts`). **Never** push server data into Zustand. |
+| No `packages/ui` yet | Material You color tokens are defined directly in this app's `tailwind.config.js` — **do not import `@cms/ui`**, that package doesn't exist. |
+| Tailwind v3.4 | CommonJS `tailwind.config.js`, `theme.extend` — don't use v4's `@theme` syntax. |
+| `@cms/block-registry` aliased straight to `src/` | Via `vite.config.ts` (`resolve.alias`) — editing block-registry doesn't need a rebuild, just refresh the dev server. |
+| Register new block editors via `registry.ts` | **Never** add `switch (block.type)` in `BlockPickerModal.tsx` or anywhere else in this app. |
 
-## RBAC Frontend (mới thêm)
+**Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
+`Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
 
-- **Một nguồn auth state duy nhất: `context/AuthContext.tsx`.** Trước đây tồn tại song song
-  `hooks/useAuth.ts` với cùng logic (2 `useState` độc lập không đồng bộ) — `LoginPage.tsx`,
-  `RolesPage.tsx`, `TopNav.tsx` từng import nhầm bản hook trong khi `App.tsx`/`ProtectedRoute.tsx`
-  dùng bản Context, khiến login xong `isAuthenticated` ở `ProtectedRoute` không được cập nhật.
-  `hooks/useAuth.ts` đã bị xoá — **luôn import `useAuth` từ `@/context/AuthContext`**, không tạo lại
-  hook trùng tên ở nơi khác.
-- **`hooks/usePermissions.ts`**: hook trung tâm, đọc `user.permissions: string[]` (dạng
-  `"resource:action"`, y hệt string dùng trong `@RequirePermissions()` ở `admin-api`) từ
-  `AuthContext`, không tạo thêm state hay gọi thêm API. API: `can(permission)`, `canAny([...])`,
-  `canAll([...])`.
-- **`components/Can.tsx`**: gate khai báo dùng trong JSX — `<Can permission="role:delete">...</Can>`,
-  hỗ trợ `anyOf`/`allOf`/`fallback`. Đặt phẳng ngang cấp `ProtectedRoute.tsx` trong `components/`,
-  không tạo subfolder riêng cho 1 file.
-- Đây là lớp UX/security-in-depth ở frontend — **backend (`RolesGuard` + `@RequirePermissions`) vẫn
-  là nguồn sự thật duy nhất**; ẩn/disable nút ở FE không thay thế permission check ở BE.
-- Đã áp dụng `Can` cho các "dangerous action": tạo/xoá role (`RolesPage.tsx`), tạo/sửa/xoá user
-  (`UsersManagementPage.tsx`), tạo/xoá page (`ContentManagementPage.tsx`), xoá block
-  (`BlockSectionCard.tsx`), Save Draft / Publish / Add Block / Set as Draft / xoá version
-  (`PageEditPage.tsx`), upload/rename/xoá media (`MediaLibraryPage.tsx`).
-  - Rename media hiện tạm dùng permission `media:create` (không phải `media:update`) để khớp đúng
-    workaround đang có ở backend — xem `apps/admin-api/AGENTS.md` mục RBAC, `media:update` chưa tồn
-    tại trong `PermissionResource`.
-- **`TopNav.tsx`**: user pill không còn hardcode "Admin User / Super Administrator" — hiển thị email
-  thật từ `AuthContext` và nhãn role suy ra từ tập permissions qua `usePermissions()` (do
-  `AuthUser`/JWT hiện chỉ có `roleId`, chưa trả role name — nếu sau này backend thêm role name vào
-  `/auth/me`, nên đổi lại lấy trực tiếp thay vì suy luận qua permission set).
+## 2. Sidebar (`components/layout/Sidebar.tsx`, state in `useSidebarStore`)
 
-## Lệnh hay dùng
+- App title is displayed **above** the menu list (not sharing a row with the first item) — when
+  collapsed, the title auto-hides/shrinks without shifting the menu below.
+- Toggle icon: chevron `<`/`>` (not a hamburger) — clearly distinguishes "collapse sidebar" from
+  "open a menu." Placed consistently at the top-left of `TopNav.tsx`.
+- `AppLayout`/`TopNav` auto-adjust width based on `isCollapsed`.
+
+## 3. Version History & Set as Draft
+
+- No separate Version Archive page anymore. The **History** panel in `PageEditPage.tsx` shows all
+  versions — DRAFT/PUBLISHED pinned at the top, followed by ARCHIVED.
+- DRAFT/ARCHIVED support direct deletion.
+- **Set as Draft** (replaces Revert) on an ARCHIVED version: overwrites (deletes) the current
+  DRAFT if one exists, creates a new DRAFT cloned from the selected version.
+
+## 4. Media Library
+
+- Grid `PAGE_SIZE = 12` (2 rows × 6 images).
+- File names: double-click/edit directly (Inline Rename).
+- Deleting an image → calls `mediaService.getUsages()`, recursively scans `mediaId` across every
+  block of every `pageVersion` (any status) → forces a detailed warning before deletion.
+- **Media Optimization**: every raster image (except SVG) has 3 WebP variants ≤300KB generated by
+  the backend — `original`, `detail`, `thumb` (algorithm details: `apps/admin-api/AGENTS.md`,
+  "Media Optimization" section).
+  - Grid in `MediaLibraryPage.tsx`: `<img src={item.thumbUrl ?? item.url} loading="lazy" />` —
+    prefers `thumbUrl`, falls back to the original `url` for older records (`thumbUrl` is `null`
+    for uploads predating this feature).
+  - Detail view/open-in-new-tab button: uses the original `url` (also already optimized ≤300KB,
+    not the raw uploaded file).
+  - `detailUrl`/`detailKey` are present in the `MediaItem` response but **not used by any
+    component yet** — intended for the Page Editor canvas preview, not implemented.
+
+## 5. Page Title
+
+`Page.title` is a dedicated Prisma column (not `seoMeta.title`) — details in
+`apps/admin-api/AGENTS.md`, "Page Title" section. All UI in this app (Content Management list,
+Page Info section, `CreatePageModal`) reads/writes `page.title` directly — `title` is **no
+longer** derived from `seoMeta.title` anywhere.
+
+### 5.1 Content Management List (`ContentManagementPage.tsx`)
+- The table only shows **Title** (falls back to `slug` if `title` is empty — pages created before
+  the migration) and **Slug** — the old "SEO Title"/"SEO Description" columns are **gone**
+  (removed including the sort field; `FillerRow` `colSpan` reduced from 7 to 6).
+- Sorting by page name now uses `sortField: 'title'` (compares `page.title`), not `'seoTitle'`
+  (which compared `publishedVersion.seoMeta.title`) as before.
+
+### 5.2 Edit Slug & SEO — two independent collapsible sections (`PageEditPage.tsx`)
+| Section | Fields | Lifecycle | Collapse state |
+|---|---|---|---|
+| Page Info | `title` (Page-level) + `slug` | applies immediately | `isPageInfoOpen`, default open |
+| SEO | `seoMeta.title` + `seoMeta.description` (PageVersion-level) | only takes effect after Save Draft | `isSeoOpen`, default open |
+
+Both sections are still bundled into a single request when pressing **Save Draft**:
+`title`/`slug` → `pagesApi.update()` (updates `Page` directly, independent of DRAFT/PUBLISHED
+state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as before). See
+`saveAllChanges()` in `PageEditPage.tsx`.
+
+## 6. Page Sections (blocks) card
+
+- Collapsible card, same style as Page Info/SEO. Clicking anywhere in the header (except the
+  **Add Block** button) toggles `isBlocksOpen`. The Add Block button uses
+  `e.stopPropagation()` so it doesn't trigger the toggle. The chevron icon sits at the **end** of
+  the header, after the Add Block button.
+- When open: the block list sits inside `max-h-[65vh] overflow-y-auto` — scrolls internally
+  instead of stretching the whole page.
+
+## 7. Roles & Permissions Page (`pages/roles/RolesPage.tsx`)
+
+- Two-column layout: role list (with userCount) on the left, permission matrix (checkboxes
+  grouped by `resource`) on the right.
+- **No separate modal** for creating/editing permissions (unlike `UserFormModal` in
+  `SettingsPage.tsx`). Renaming a role and granting permissions are two separate UI actions in the
+  same panel, matching two separate backend endpoints (`PATCH /roles/:id` vs
+  `PATCH /roles/:id/permissions`).
+- `canManage` is computed via `usePermissions().can('role:update')` — no longer a manual
+  `useMemo` reading `user.permissions.includes(...)` directly.
+- `useRoles.ts` uses plain `useState`/`useEffect`/`useCallback` — **does not use
+  `@tanstack/react-query`** (not in `admin-web`'s `package.json`). Every data-fetching hook in
+  this app (`useMedia.ts`, `useUsers.ts`, `useRoles.ts`) follows this pattern — manages its own
+  local state, no automatic cache/invalidation across tabs.
+- `roles.api.ts`: `Role.permissions` is `Permission[]` (object `{id, resource, action}`), quite
+  different from the original draft design (`string[]`) — remember the correct shape when editing
+  related code.
+
+## 8. RBAC Frontend
+
+- **Single source of auth state: `context/AuthContext.tsx`.** `hooks/useAuth.ts` (an older
+  duplicate with the same logic, two independent `useState` calls out of sync) **has been
+  removed** — it used to cause a bug where, after login, `isAuthenticated` in `ProtectedRoute`
+  wasn't updated, because different files imported different versions of the hook. **Always
+  import `useAuth` from `@/context/AuthContext`**, don't recreate a hook with the same name
+  elsewhere.
+- `hooks/usePermissions.ts`: reads `user.permissions: string[]` (in `"resource:action"` form,
+  matching the string used in `@RequirePermissions()` on `admin-api`) from `AuthContext` — no
+  extra state or API calls. API: `can(permission)`, `canAny([...])`, `canAll([...])`.
+- `components/Can.tsx`: declarative JSX gate — `<Can permission="role:delete">...</Can>`,
+  supports `anyOf`/`allOf`/`fallback`. Sits flat alongside `ProtectedRoute.tsx` in `components/`,
+  no dedicated subfolder for a single file.
+- ⚠️ This is a UX/security-in-depth layer on the frontend — **the backend (`RolesGuard` +
+  `@RequirePermissions`) remains the single source of truth**; hiding/disabling a button on the
+  frontend does not replace the backend permission check.
+- `Can` is already applied to "dangerous actions": create/delete role (`RolesPage.tsx`),
+  create/edit/delete user (`UsersManagementPage.tsx`), create/delete page
+  (`ContentManagementPage.tsx`), delete block (`BlockSectionCard.tsx`), Save Draft/Publish/Add
+  Block/Set as Draft/delete version (`PageEditPage.tsx`), upload/rename/delete media
+  (`MediaLibraryPage.tsx`).
+  - Media rename temporarily uses the `media:create` permission (not `media:update`) — matching
+    the backend workaround, see `apps/admin-api/AGENTS.md`, RBAC section.
+- `TopNav.tsx`: the user pill shows the real email from `AuthContext` plus a role label derived
+  from the permission set via `usePermissions()` (the JWT currently only carries `roleId`, no
+  role name — if the backend later adds a role name to `/auth/me`, switch to reading it directly
+  instead of inferring it).
+
+## 9. Common commands
 
 ```bash
-pnpm --filter @cms/admin-web dev     # :5173, proxy /api và /uploads sang :3001
+pnpm --filter @cms/admin-web dev     # :5173, proxies /api and /uploads to :3001
 pnpm --filter @cms/admin-web build   # tsc -b && vite build
 pnpm --filter @cms/admin-web lint
 ```
 
-## Lưu ý
+## 10. Known gap
 
-Canvas preview trong Page Editor tái dùng Renderer từ `block-registry`, nhưng theme Tailwind ở
-`apps/web` gần như rỗng → preview hiện **không khớp giao diện thật**. Đây là gap đã biết, không
-phải bug component nếu gặp task liên quan.
+The Page Editor's canvas preview reuses the Renderer from `block-registry`, but `apps/web`'s
+Tailwind theme is nearly empty → the preview **doesn't match the real site's appearance**. This is
+a known gap, not a component bug, if you encounter a related task.
 
-## Deploy production — proxy KHÔNG hoạt động ở preview mode
+## 11. Production deploy — proxy does NOT work in preview mode
 
-`server.proxy` trong `vite.config.ts` chỉ hoạt động khi chạy `vite dev`, **không hoạt động** khi chạy `vite preview` (dùng để serve production build khi deploy). Vì `src/api/client.ts` dùng đường dẫn tương đối (`BASE_URL`), khi deploy qua domain thật, phải đọc `VITE_API_URL` từ `.env.production` trỏ thẳng vào domain của `admin-api` (ví dụ `https://api.khucnhan.io.vn/api/v1`), nếu không toàn bộ API call sẽ 404. Chi tiết đầy đủ xem `DEPLOYMENT.md` ở root.
+`server.proxy` in `vite.config.ts` only works under `vite dev`, **not** under `vite preview` (used
+to serve the production build on deploy). `src/api/client.ts` uses a relative path (`BASE_URL`) —
+when deploying to a real domain, `VITE_API_URL` must be read from `.env.production` pointing
+directly at the `admin-api` domain (e.g. `https://api.khucnhan.io.vn/api/v1`), otherwise every API
+call returns 404. Full details: `DEPLOYMENT.md` at root.
 
-Vite 6 `preview` mặc định chặn host lạ — khi map domain qua Cloudflare Tunnel hoặc reverse proxy khác, phải thêm domain vào `preview.allowedHosts` trong `vite.config.ts`.
+⚠️ Vite 6's `preview` blocks unrecognized hosts by default — when mapping a domain via Cloudflare
+Tunnel or another reverse proxy, add the domain to `preview.allowedHosts` in `vite.config.ts`.

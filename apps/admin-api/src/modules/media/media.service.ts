@@ -25,7 +25,7 @@ export const listMediaSchema = z.object({
 export type ListMediaDto = z.infer<typeof listMediaSchema>;
 
 export const renameMediaSchema = z.object({
-  name: z.string().trim().min(1, 'Tên file không được để trống.').max(255),
+  name: z.string().trim().min(1, 'The filename cannot be empty.').max(255),
 });
 
 export type RenameMediaDto = z.infer<typeof renameMediaSchema>;
@@ -235,14 +235,14 @@ export class MediaService {
     if (decision.usedOriginal) {
       // Giữ nguyên file gốc đã ghi ở bước upload() trước đó — không đụng tới sourceFilePath.
       this.logger.warn(
-        `[upload][original] file="${key}": GIỮ NGUYÊN file gốc vì optimize làm TĂNG size ` +
+        `[upload][original] file="${key}": KEEP the original file because optimizing will INCREASE its size ` +
         `(+${optimizedSizeBytes - originalSizeBytes}B). mimeType/extension không đổi.`,
       );
     } else {
       const savedBytes = originalSizeBytes - optimizedSizeBytes;
       const savedPercent = originalSizeBytes > 0 ? ((savedBytes / originalSizeBytes) * 100).toFixed(1) : '0';
       this.logger.log(
-        `[upload][original] file="${key}": dùng bản optimize WebP, tiết kiệm ${savedBytes}B (${savedPercent}%).`,
+        `[upload][original] file="${key}": use the optimized WebP version, saving ${savedBytes}B (${savedPercent}%).`,
       );
 
       finalKey = ext.toLowerCase() === '.webp' ? key : `${base}.webp`;
@@ -331,7 +331,7 @@ export class MediaService {
       if (!sanitizedBase) {
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
-          message: 'Tên file không hợp lệ sau khi chuẩn hoá.',
+          message: 'The filename is invalid after sanitization.',
         });
       }
 

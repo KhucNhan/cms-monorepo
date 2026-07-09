@@ -1,23 +1,18 @@
 # AGENTS.md — apps/web
 
-> Đọc `/AGENTS.md` (root) trước nếu chưa đọc.
+> Read `/AGENTS.md` (root) first. This file only covers conventions specific to `apps/web`.
 
-## Quy ước riêng app này
+## Mandatory rules
 
-- **Không bao giờ import Prisma hay query Postgres trực tiếp.** Mọi dữ liệu lấy qua Admin API,
-  điểm gọi duy nhất là `lib/cms-client.ts` (chưa tồn tại trong code hiện tại — nếu cần thêm, đây
-  là nơi đặt, không rải fetch call ở `page.tsx`/`route.ts`). Nếu thấy import Prisma ở đâu trong
-  app này — đó là lỗi kiến trúc, báo lại thay vì tự sửa tiếp.
-- **`@cms/block-registry` qua `transpilePackages`** (`next.config.ts`) — không cần build package
-  khi dev, Next tự transpile từ `src/`.
-- `render-blocks.tsx` map `block[]` → Renderer theo registry — thêm block mới không sửa file này
-  (registry tự động cung cấp).
-- **`tailwind.config.js` gần như rỗng** (`theme.extend: {}`) — token màu Material You của
-  `admin-web` chưa được đồng bộ sang đây (xem gap ở `apps/admin-web/AGENTS.md`).
-- Route động chính: `app/[slug]/page.tsx`. Revalidate qua webhook `app/api/revalidate/route.ts`
-  khi admin-api publish — không tự thêm cơ chế cache khác song song.
+| Rule | Detail |
+|---|---|
+| Never import Prisma / query Postgres directly | All data comes through the Admin API, with a single call site: `lib/cms-client.ts` (**does not exist yet** in current code — if it needs to be added, this is where it belongs, not scattered fetch calls across `page.tsx`/`route.ts`). A Prisma import found anywhere in this app is an architecture error — report it, don't fix it in place. |
+| `@cms/block-registry` via `transpilePackages` | Configured in `next.config.ts` — no need to build the package during dev, Next transpiles directly from `src/`. |
+| `render-blocks.tsx` maps `block[]` → Renderer via the registry | Adding a new block type does **not** require editing this file (the registry supplies it automatically). |
+| `tailwind.config.js` is nearly empty (`theme.extend: {}`) | `admin-web`'s Material You color tokens haven't been synced here — see the gap noted in `apps/admin-web/AGENTS.md`, "Known gap" section. |
+| Main dynamic route: `app/[slug]/page.tsx` | Revalidated via webhook `app/api/revalidate/route.ts` when admin-api publishes — don't add a separate parallel caching mechanism. |
 
-## Lệnh hay dùng
+## Common commands
 
 ```bash
 pnpm --filter @cms/web dev     # :3000
@@ -25,7 +20,9 @@ pnpm --filter @cms/web build
 pnpm --filter @cms/web lint
 ```
 
-## Env cần thiết
+## Required env (`.env.local`)
 
-`.env.local` phải có `API_URL=http://localhost:3001` (hoặc URL admin-api thật) và
-`REVALIDATE_SECRET` khớp với `admin-api/.env`.
+```dotenv
+API_URL=http://localhost:3001          # or the real admin-api URL
+REVALIDATE_SECRET=<must match admin-api/.env>
+```

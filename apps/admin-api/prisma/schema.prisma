@@ -63,8 +63,13 @@ model RolePermission {
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
-  password     String  // bcrypt hash — tên trường khớp DBML
+  password     String  // bcrypt hash — mọi user đều có password; không có Google-only account
   roleId       String
+
+  // Google OAuth — set lần đầu khi user đăng nhập Google, null với user chưa link
+  googleId    String? @unique  // Google "sub" claim
+  displayName String?          // full name từ Google profile (display only)
+  avatarUrl   String?          // profile picture từ Google (display only)
 
   role         Role          @relation(fields: [roleId], references: [id])
   pageVersions PageVersion[]

@@ -19,7 +19,7 @@ export function useRoles() {
       setRoles(rolesData);
       setAllPermissions(permsData);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Không tải được danh sách role.');
+      setError(err instanceof ApiClientError ? err.message : 'The list of roles could not be loaded.');
     } finally {
       setLoading(false);
     }
