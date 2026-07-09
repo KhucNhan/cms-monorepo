@@ -113,6 +113,46 @@ from `PageVersion.seoMeta.title`.
   see root `AGENTS.md` Section 1 "Known deviation" for the actual state (services inject
   `PrismaService` directly).
 
+## 8. Google OAuth Login — Why Not Passport Guards
+
+**Problem:** The initial implementation added `passport-google-oauth20` with the standard NestJS
+pattern — a `GoogleStrategy` (`PassportStrategy`) plus `@UseGuards(AuthGuard('google'))` /
+`GoogleAuthGuard` on `GET /auth/google/callback`. This is the textbook NestJS approach and works
+fine on the default Express adapter.
+
+**Why it broke here:** `admin-api` runs on the **Fastify** adapter (`AGENTS.md` Section 0), not
+Express. Passport's guard integration assumes Express-style request/response objects and
+middleware chaining; under Fastify this caused the callback route to hang or 500 rather than
+completing the OAuth handshake — a category of bug that doesn't show up in most Nest+Passport
+tutorials because they default to Express.
+
+**Design decision:** Keep `GoogleStrategy`/`GoogleAuthGuard` as inert reference files, but do not
+wire them into any route. Instead:
+- `GET /auth/google` manually constructs the Google consent-screen URL and issues a raw
+  `reply.code(302).redirect(...)` — no Passport involved.
+- `GET /auth/google/callback` reads `?code=` off the Fastify request query directly and calls
+  `AuthService.exchangeGoogleCode(code)`, which performs the token exchange
+  (`POST https://oauth2.googleapis.com/token`) and userinfo fetch
+  (`GET https://www.googleapis.com/oauth2/v2/userinfo`) via plain `axios` calls — no
+  session/strategy/guard machinery at all.
+- This keeps the controller in full control of the redirect in every branch (success, no matching
+  account, upstream error), which also happens to make the "no account → redirect with
+  `?error=no_account`" UX (see `AGENTS.md`, Auth gotcha) trivial to implement, whereas the
+  Passport-guard version needed a guard override (`handleRequest`) just to avoid an unwanted 401.
+
+**Consequence agents must know:** if a future task is "add [some other] OAuth provider," do **not**
+default to the standard `PassportStrategy` + `@UseGuards` tutorial pattern for this codebase —
+follow the manual-exchange pattern established here, or explicitly confirm whether the target
+route runs under the Fastify or Express adapter first.
+
+**Existing-users-only, no auto-provisioning:** `UsersService.findUserByGoogleProfile()` will
+link a Google identity to an existing account by email (first login) or by `googleId` (subsequent
+logins), but deliberately returns `null` — never creates a `User` row — when no account matches.
+This mirrors the product requirement that accounts are still provisioned by an admin (via
+`POST /users`), and Google Sign-In is purely an alternate login method for those pre-existing
+accounts, not a self-service signup flow. If a future task asks for "let anyone sign up with
+Google," that is a deliberate policy change, not a bugfix — flag it before implementing.
+
 ## Known Gaps in Source Documentation
 
 The following sections were referenced in earlier planning but do not exist as standalone
