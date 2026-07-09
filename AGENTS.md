@@ -67,13 +67,14 @@ pnpm test
 
 ## 3. Block Registry Checklist
 
-See `packages/block-registry/AGENTS.md` for full 5-step checklist. TL;DR:
+See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 
 1. Create `src/blocks/<block-name>/schema.ts` with Zod schema (NO React/NestJS imports)
 2. Create `src/blocks/<block-name>/index.ts` exporting Editor + Renderer
 3. Register in `src/registry.ts`
 4. Export from `src/index.ts`
-5. Run `pnpm build`
+5. Add a static `thumbnail` image (`apps/admin-web/public/block-thumbnails/<type>.png`) and reference it via the `thumbnail` field on `BlockDefinition` — used by `BlockPickerModal` preview (see admin-web `AGENTS.md`, "Block Picker — Search & Preview")
+6. Run `pnpm build`
 
 ---
 
@@ -87,6 +88,7 @@ See `packages/block-registry/AGENTS.md` for full 5-step checklist. TL;DR:
 | `admin-web` has no shared `packages/ui` | Current | Material You tokens in `admin-web/tailwind.config.js` |
 | `Role.permissions` = `Json[]`, no `Permission` model | Schema | Query via `role.permissions`, not `role.rolePermissions` |
 | `Page.title` (unversioned, display name) ≠ `PageVersion.seoMeta.title` (versioned, public `<title>`) | Schema | **Do not confuse.** See `ARCHITECTURE-DESIGN.md` Section 6 |
+| `BlockDefinition.thumbnail` is `optional` | Current | Blocks without a `thumbnail` fall back to the Lucide/Material icon in `BlockPickerModal` — not a bug, just not backfilled yet for that block |
 
 ---
 

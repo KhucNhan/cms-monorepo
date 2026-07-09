@@ -153,6 +153,45 @@ This mirrors the product requirement that accounts are still provisioned by an a
 accounts, not a self-service signup flow. If a future task asks for "let anyone sign up with
 Google," that is a deliberate policy change, not a bugfix — flag it before implementing.
 
+## 9. Block Picker Preview — Static Thumbnails, Not Live Rendering
+
+**Problem:** `BlockPickerModal` originally only showed an icon + type name per block — users had
+to insert a block blindly, then delete/undo it if it wasn't visually what they expected.
+
+**Options considered:**
+1. **Developer-authored static thumbnail** (a PNG/SVG committed alongside each block, referenced
+   via a new `thumbnail` field on `BlockDefinition`).
+2. **Auto-generate a thumbnail at build/dev time** by rendering each block's `Renderer` with
+   `defaultData` through a headless browser (Puppeteer/Playwright) and screenshotting it.
+
+**Decision: Option 1 (static thumbnail).**
+
+**Why not Option 2:** it requires introducing a whole new rendering/screenshot pipeline (headless
+browser dependency, native bindings, extra build step) purely to solve a cosmetic problem, for a
+registry that currently has 3 block types. It also risks producing misleading previews if
+`defaultData` doesn't represent a realistic/attractive instance of the block. This is
+disproportionate infrastructure for the current scale — revisit only if the block count grows
+substantially (e.g. 15+) and thumbnails become a maintenance burden to keep in sync by hand.
+
+**Why Option 1 fits the existing invariants:** the thumbnail is a plain static asset path
+(`BlockDefinition.thumbnail: string`, optional), not a component — so it does not violate
+Invariant 1.1 (`schema.ts` must stay React/NestJS-free) and doesn't touch `admin-api` at all
+(Invariant 1.3, backend never renders anything visual). Adding it is a pure additive change to the
+`packages/block-registry` checklist (`AGENTS.md` Section 3), not an architecture change.
+
+**Consequence agents must know:** thumbnails are **not guaranteed to stay visually in sync** with
+a block's actual `Editor`/`Renderer` output if that block's design changes later — there is no
+automated check for this. If a block's visual design changes significantly, updating its
+thumbnail image is a manual follow-up step, easy to forget. If this becomes a recurring problem,
+that's a signal to revisit Option 2, not a bug in the current implementation.
+
+**UI interaction detail (why click, not hover):** hover-to-preview was tried first in
+`BlockPickerModal` but felt accidental while scrolling a grid of many blocks — moving the mouse
+across the grid kept flipping the preview panel unintentionally. Switched to an explicit
+click-to-preview model, with a separate "Select" button to actually insert the block, so browsing
+previews and committing to a choice are two clearly distinct actions. See `apps/admin-web/AGENTS.md`
+Section 6.1 for the implementation.
+
 ## Known Gaps in Source Documentation
 
 The following sections were referenced in earlier planning but do not exist as standalone
