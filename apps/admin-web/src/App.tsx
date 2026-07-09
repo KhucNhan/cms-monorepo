@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { LoginPage } from '@/pages/auth/LoginPage';
+import { GoogleCallbackPage } from '@/pages/auth/GoogleCallbackPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { ContentManagementPage } from '@/pages/content-management/ContentManagementPage';
 import { PageEditPage } from '@/pages/content-management/PageEditPage';
@@ -27,6 +28,12 @@ const router = createBrowserRouter([
       {
         path: '/login',
         element: <LoginPage />,
+      },
+      {
+        // Public route — must be outside ProtectedRoute so it can exchange
+        // the Google token before the user is authenticated
+        path: '/auth/callback',
+        element: <GoogleCallbackPage />,
       },
       {
         element: <ProtectedRoute />,

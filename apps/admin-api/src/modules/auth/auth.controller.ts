@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Res,
   Req,
@@ -13,9 +14,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import '@fastify/cookie';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { loginSchema, type LoginDto } from './dto/auth.dto';
 import type { JwtPayload } from '@cms/shared-types';
@@ -103,5 +106,56 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user info' })
   me(@Req() req: FastifyRequest & { user: JwtPayload }) {
     return req.user;
+  }
+
+  // ── Google OAuth ─────────────────────────────────────────────────────────────
+
+  /**
+   * Step 1 — Redirect to Google consent screen.
+   * Manually redirects to bypass Passport's Express-style response method calls
+   * which are incompatible with Fastify.
+   */
+  @Get('google')
+  @ApiOperation({ summary: 'Initiate Google OAuth flow (redirects to Google)' })
+  async googleLogin(@Res() reply: FastifyReply) {
+    const clientId = process.env['GOOGLE_CLIENT_ID'];
+    const redirectUri = process.env['GOOGLE_CALLBACK_URL'];
+    
+    if (!clientId || !redirectUri) {
+      throw new Error('Google OAuth configuration is missing (GOOGLE_CLIENT_ID or GOOGLE_CALLBACK_URL)');
+    }
+
+    const scope = 'email profile';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent(scope)}`;
+
+    return reply.code(302).redirect(authUrl);
+  }
+
+  /**
+   * Step 2 — Google redirects back here after user consents.
+   * Uses GoogleAuthGuard (not plain AuthGuard) so a rejected login (no matching account)
+   * results in a redirect to /login?error=no_account rather than a raw 401 JSON.
+   */
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Google OAuth callback — handles token exchange and redirect' })
+  async googleCallback(
+    @Req()  req:   FastifyRequest & { user?: any },
+    @Res()  reply: FastifyReply,
+  ) {
+    const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:5173';
+
+    if (!req.user) {
+      // Strategy returned done(null, false) — no matching account
+      return reply.code(302).redirect(`${frontendUrl}/login?error=no_account`);
+    }
+
+    const { accessToken, refreshToken } = await this.authService.loginWithGoogle(req.user);
+    reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions);
+    return reply.code(302).redirect(`${frontendUrl}/auth/callback#token=${accessToken}`);
   }
 }
