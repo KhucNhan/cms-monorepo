@@ -11,6 +11,7 @@
 | Validate `blocks.data` with Zod only | `BlocksService.validateBlockData()` uses the schema from `@cms/block-registry` | Do not add parallel class-validator decorators for this JSONB field — two validation sources will drift apart |
 | Never render HTML | JSON responses only | A task to "make a block look nicer" does not belong in this app |
 | Publish = flip the pointer | `pages.publishedVersionId` | Never UPDATE the currently PUBLISHED version directly |
+| No Passport Guards for Google OAuth callback | `GET /auth/google` and `GET /auth/google/callback` are handled manually in `AuthController`/`AuthService` (redirect + `axios` code exchange) — **not** `@UseGuards(AuthGuard('google'))` | Passport's guard integration is Express-oriented and breaks under this app's Fastify adapter (hangs / 500s). See Section 10. |
 
 ## 2. Media Usage Check
 
@@ -63,7 +64,9 @@
 - **MANDATORY RULE**: every route in every controller must have `@RequirePermissions`, including
   `GET` routes. There are no "public" routes among the audited modules (`blocks`, `media`,
   `pages`, `page-versions`, `users`, `roles`) — the single exception is
-  `public-pages.controller.ts` (public API for `apps/web`). For any new route, always ask which
+  `public-pages.controller.ts` (public API for `apps/web`) **and** the two Google OAuth routes
+  (`GET /auth/google`, `GET /auth/google/callback`), which must remain unauthenticated by nature
+  (that's the entire point of a login endpoint). For any new route, always ask which
   `resource:action` it belongs to before merging.
 
 ### 5.1 Latest audit (routes patched for missing permissions)
@@ -162,6 +165,12 @@ root, this is the cause. Always call `pnpm --filter admin-api prisma:migrate` di
   `title = ''`, and the UI/API fall back to `slug`/`seoMeta.title` for display, but the actual
   `title` column stays empty until an admin edits it manually. Not a bug, just a missing backfill
   script.
+- `GoogleStrategy` (`strategies/google.strategy.ts`) and `GoogleAuthGuard`
+  (`guards/google-auth.guard.ts`) exist in the codebase and are registered as `providers` in
+  `auth.module.ts`, but are **not used by any route**. Kept as reference / in case a future Fastify
+  version or Passport update fixes the incompatibility. Do not wire them back into
+  `/auth/google/callback` without re-verifying the Fastify issue is actually resolved — see
+  Section 10.
 
 ## 9. CORS for multi-subdomain deployment
 
@@ -169,3 +178,61 @@ When `admin-web`/`admin-api` are on different subdomains: declare all domains in
 (`.env`, comma-separated, no spaces). `app.enableCors()` in `main.ts` must explicitly declare
 `methods` (including `PATCH`, `DELETE`) — by default, preflight for these methods can be blocked
 even with a correct origin. Details: `DEPLOYMENT.md` at root.
+
+## 10. Google OAuth Login (existing users only)
+
+**Why no Passport Guard:** this app runs on the **Fastify** adapter (not Express). The standard
+NestJS tutorial pattern — `PassportStrategy` + `@UseGuards(AuthGuard('google'))` on the callback
+route — hung / crashed under Fastify (Passport's guard integration assumes Express-style
+request/response). Full rationale: root `ARCHITECTURE-DESIGN.md`, Section 8.
+
+**Actual flow (`modules/auth/`):**
+
+- `GET /auth/google` (`AuthController.googleLogin`) — reads `GOOGLE_CLIENT_ID` /
+  `GOOGLE_CALLBACK_URL` from env, manually builds the Google consent-screen URL, and does
+  `reply.code(302).redirect(authUrl)`. No Passport strategy invoked.
+- `GET /auth/google/callback` (`AuthController.googleCallback`) — reads `code` off
+  `req.query`, calls `AuthService.exchangeGoogleCode(code)`:
+  1. `POST https://oauth2.googleapis.com/token` — exchanges the code for a Google access token
+     (plain `axios`, not `passport-google-oauth20`'s internal client).
+  2. `GET https://www.googleapis.com/oauth2/v2/userinfo` — fetches `id`, `email`, `name`,
+     `picture`, `verified_email` using the Google access token.
+  3. Rejects if `verified_email` is falsy, or `email`/`id` missing.
+  4. Calls `UsersService.findUserByGoogleProfile({ googleId, email, displayName, avatarUrl })`
+     — **never creates** a new `User` row (see below).
+  5. On match, reuses `AuthService.loginWithGoogle(user)` to sign app JWTs the same way
+     `login()` does for password auth (same `JwtPayload` shape, same refresh-token-hash rotation).
+- Controller owns every redirect branch — no code, invalid account, or upstream error all
+  redirect to `${FRONTEND_URL}/login?error=...` instead of throwing raw JSON, since a browser
+  navigation (not an XHR) hits this route.
+
+**Existing users only — no auto-provisioning:**
+`UsersService.findUserByGoogleProfile()`:
+1. Fast path: look up by `googleId` (already linked from a previous Google login).
+2. Slow path: look up by normalized (lowercased/trimmed) `email` — if found, **link** the account
+   by writing `googleId`/`displayName`/`avatarUrl` onto the existing row.
+3. If neither matches → return `null`. The controller then redirects to
+   `/login?error=no_account`. **No new `User` row is ever created from this flow** — accounts are
+   still provisioned only via `POST /users` (admin/editor UI). If a future task asks for
+   self-service Google sign-up, that's a deliberate product/architecture change, not a bugfix —
+   flag it.
+
+**Required env vars** (`.env`):
+```dotenv
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=https://api.khucnhan.io.vn/api/v1/auth/google/callback
+FRONTEND_URL=https://admin.khucnhan.io.vn
+```
+`GOOGLE_CALLBACK_URL` must exactly match an **Authorized redirect URI** registered in Google Cloud
+Console (including the `/api/v1` prefix — easy to forget). Local dev needs its own separate entry
+(e.g. `http://localhost:3001/api/v1/auth/google/callback`) added alongside the production one, not
+replacing it.
+
+**New Prisma columns** (`User` model): `googleId String? @unique`, `displayName String?`,
+`avatarUrl String?` — all nullable since password-only users won't have them until their first
+Google login links the account. Migration: `add_google_oauth_fields`.
+
+**Dependencies:** `passport-google-oauth20` + `@types/passport-google-oauth20` are still installed
+(used only by the inert `GoogleStrategy`, kept as reference — see Section 8 gap note); the actual
+runtime flow's only new dependency is `axios`.

@@ -11,17 +11,10 @@
 | Tailwind v3.4 | CommonJS `tailwind.config.js`, `theme.extend` — don't use v4's `@theme` syntax. |
 | `@cms/block-registry` aliased straight to `src/` | Via `vite.config.ts` (`resolve.alias`) — editing block-registry doesn't need a rebuild, just refresh the dev server. |
 | Register new block editors via `registry.ts` | **Never** add `switch (block.type)` in `BlockPickerModal.tsx` or anywhere else in this app. |
+| Google login must update `AuthContext` in-place | `GoogleCallbackPage.tsx` MUST call `AuthContext`'s `loginWithToken(token)` — never just store the token and separately call `authApi.me()`. See Section 8.1. |
 
 **Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
 `Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
-
-⚠️ **`dialog.tsx` gotcha — `DialogContent` base className already has a fixed width**
-(`sm:max-w-sm`). Passing a wider width from a caller (e.g. `className="sm:max-w-5xl"`) only
-works if the **same responsive prefix** is used, because `cn()` uses `tailwind-merge`, which
-treats `max-w-4xl` (no prefix) and `sm:max-w-sm` (prefixed) as two independent "slots" — they
-don't dedupe, and the prefixed rule wins on real screens since Tailwind emits it later in the
-stylesheet. Always match the prefix already used in the base component (`sm:max-w-*`), or the
-width override will silently appear to do nothing (this exact issue hit `BlockPickerModal`).
 
 ## 2. Sidebar (`components/layout/Sidebar.tsx`, state in `useSidebarStore`)
 
@@ -55,10 +48,6 @@ width override will silently appear to do nothing (this exact issue hit `BlockPi
     not the raw uploaded file).
   - `detailUrl`/`detailKey` are present in the `MediaItem` response but **not used by any
     component yet** — intended for the Page Editor canvas preview, not implemented.
-  - **Media `url`/`detailUrl`/`thumbUrl` are absolute URLs** (built server-side from
-    `API_PUBLIC_URL`, see `apps/admin-api/AGENTS.md`) — never assume they're relative to
-    `admin-web`'s own origin. This matters if you ever build a new component that constructs a
-    media link manually instead of using the value already returned by the API.
 
 ## 5. Page Title
 
@@ -93,44 +82,6 @@ state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as
   the header, after the Add Block button.
 - When open: the block list sits inside `max-h-[65vh] overflow-y-auto` — scrolls internally
   instead of stretching the whole page.
-- Clicking **Add Block** opens `BlockPickerModal` (see Section 6.1 below) instead of inserting a
-  block directly.
-
-### 6.1 Block Picker — Search & Live Preview (`BlockPickerModal.tsx`)
-
-Added so users can see what a block looks like before inserting it, without needing to add it to
-the page and undo if it's the wrong pick.
-
-- **Layout**: fixed-size dialog (`h-[760px]`, `sm:max-w-5xl` — see the `dialog.tsx` gotcha in
-  Section 1 if you need to resize this further), split into two columns inside a
-  `flex gap-lg flex-1 min-h-0` row:
-  - **Left** — scrollable grid (`grid-cols-2`, `overflow-y-auto`) of every block from
-    `getAllBlockDefinitions()`, optionally filtered by the search box above it.
-  - **Right** — fixed-width (`w-[640px]`) preview panel showing the large `thumbnail` image of
-    whichever block was last clicked.
-- **Search box**: plain controlled `<input>` (no debounce needed — the list is small and filtering
-  is a pure client-side `.filter()`), matches against `def.label` and `def.type`
-  (case-insensitive substring). Shows an empty state (`search_off` icon + message) when nothing
-  matches, instead of an empty grid.
-- **Thumbnails come from `BlockDefinition.thumbnail`** (`packages/block-registry`), a static image
-  path (e.g. `/block-thumbnails/hero.png`) served from `apps/admin-web/public/block-thumbnails/`
-  — **not** auto-rendered from the block's real `Renderer`. See `ARCHITECTURE-DESIGN.md` Section 9
-  for why a static, dev-authored thumbnail was chosen over rendering a live preview.
-  - A block with no `thumbnail` set falls back to its Lucide/Material icon everywhere (grid item
-    and, implicitly, an empty preview panel state) — not a bug, just not backfilled yet.
-- **Click-to-preview, not hover-to-preview**: clicking anywhere on a block's card (the whole card
-  is a `role="button"` div, not just the image) sets it as the active preview — it does **not**
-  select/insert the block. Hover was tried first but felt accidental/twitchy when scrolling the
-  grid; an explicit click is the deliberate trigger now.
-  - The currently-previewed card gets a visual "selected" treatment: `ring-2 ring-primary/40
-    bg-primary/5 shadow-md` on the card, plus a `scale-110` on its thumbnail — intentionally
-    **no ring/border directly on the thumbnail image itself** (tried initially, looked cluttered
-    stacked with the card's own ring).
-- **A separate "Select" button** (styled as a real filled button — `bg-primary text-on-primary`,
-  not a text link) is what actually calls `onSelect(def.type)` and inserts the block. It uses
-  `e.stopPropagation()` so clicking it doesn't also re-trigger the card's preview-click handler.
-- If you need to change block count per row or panel width, do it in `BlockPickerModal.tsx`
-  directly — there is no shared "picker grid" component yet, this is the only consumer.
 
 ## 7. Roles & Permissions Page (`pages/roles/RolesPage.tsx`)
 
@@ -178,6 +129,28 @@ the page and undo if it's the wrong pick.
   from the permission set via `usePermissions()` (the JWT currently only carries `roleId`, no
   role name — if the backend later adds a role name to `/auth/me`, switch to reading it directly
   instead of inferring it).
+
+### 8.1 Google Login callback — must update `AuthContext` in-place
+
+`GoogleCallbackPage.tsx` receives the access token as a URL fragment
+(`/auth/callback#token=...`, set by `admin-api`'s `AuthController.googleCallback` redirect — see
+`apps/admin-api/AGENTS.md`, Section 10) and must log the user in **synchronously with context
+state**, not just token storage.
+
+- **Bug that existed before this was fixed**: the page stored the token via
+  `tokenStorage.set(token)` and called `authApi.me()` directly, but never pushed the result into
+  `AuthContext`'s `user` state. So `AuthContext.isAuthenticated` stayed `false` even though a
+  valid token was on disk. Navigating to `/dashboard` right after made `ProtectedRoute` see
+  `isAuthenticated: false` and bounce the user straight back to `/login`. It only "worked" on a
+  second load/refresh, because `AuthContext`'s mount-time hydration check would then find the
+  token and log in properly — making the bug easy to miss in quick manual testing.
+- **Fix**: `AuthContext.tsx` exposes `loginWithToken(token: string)`, which stores the token,
+  fetches `/auth/me`, and updates `user` state in one call. `GoogleCallbackPage.tsx` calls
+  **only** this method, then navigates to `/dashboard`.
+- **Rule for future auth-adjacent pages**: any page that receives a token out-of-band (OAuth
+  redirect, magic link, etc.) must route through a single `AuthContext` method that both persists
+  the token and updates in-memory `user` state before navigating away — never split "store token"
+  and "fetch + use user info" across two separate calls from outside `AuthContext`.
 
 ## 9. Common commands
 
