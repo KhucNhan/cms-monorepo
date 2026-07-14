@@ -153,7 +153,42 @@ This mirrors the product requirement that accounts are still provisioned by an a
 accounts, not a self-service signup flow. If a future task asks for "let anyone sign up with
 Google," that is a deliberate policy change, not a bugfix — flag it before implementing.
 
-## 9. Block Picker Preview — Static Thumbnails, Not Live Rendering
+## 9. Live Edit Mode (`apps/web`) — DRAFT uniqueness & data enrichment
+
+**Vấn đề trước khi fix:** `POST /pages/:id/draft` (`PageVersionsService.getOrCreateDraft`) được
+gọi mỗi lần admin bật Edit Mode trên public site. Hàm này ban đầu:
+1. Không có `orderBy` khi tìm DRAFT hiện có, và
+2. Không có transaction/lock giữa bước "kiểm tra tồn tại" và bước "tạo mới",
+
+nên khi 2 request tới gần như đồng thời (React 18 Strict Mode tự động double-invoke effect
+trong dev là nguyên nhân phổ biến nhất, nhưng cũng có thể xảy ra do double-click hoặc 2 tab),
+cả hai đều thấy "chưa có DRAFT" và cùng tạo mới — vi phạm invariant "tối đa 1 DRAFT/page"
+(`AGENTS.md` §1.5) dù không có ai cố tình mutate version PUBLISHED trực tiếp.
+
+**Quyết định thiết kế:** thay vì chỉ sửa ở tầng application (dễ tái phát nếu có endpoint mới nào
+đó quên check), invariant này được đưa xuống **tầng DB** bằng partial unique index:
+```sql
+CREATE UNIQUE INDEX "page_versions_one_draft_per_page"
+ON "page_versions" ("pageId") WHERE status = 'DRAFT';
+```
+Application code (`getOrCreateDraft`) vẫn giữ check "existing trước" như một fast path (tránh
+round-trip lỗi không cần thiết ở trường hợp thông thường), nhưng giờ có thêm try/catch bắt
+`P2002` làm lớp phòng thủ thứ hai — nếu thua race, refetch bản DRAFT "chiến thắng" thay vì trả lỗi.
+
+**Vấn đề thứ hai, cùng khu vực:** `getOrCreateDraft`/`cloneVersionIntoNewDraft`/`revertToVersion`
+trả `PageVersion.blocks` thẳng từ Prisma, không qua bước enrich `hero.image.url` từ bảng `Media`
+(khác với `BlocksService.findByVersion()`, dùng bởi `GET /blocks`, vốn đã enrich). Hệ quả: vừa
+vào Edit Mode, banner hero hiện "mất ảnh" (chỉ có `mediaId`, không có `url`) cho tới khi user tự
+chọn lại ảnh (lúc đó `MediaPicker.onSelect` tự set `url` vào state client, che giấu triệu chứng
+gốc). **Fix:** mọi hàm trả blocks ra ngoài API trong `PageVersionsService` đều đi qua
+`enrichVersionBlocks()`, tái sử dụng `BlocksService.enrichBlockData()` — tránh viết lại logic
+resolve media 2 lần ở 2 service khác nhau.
+
+**Bài học chung cho cả 2 vấn đề:** bất kỳ hàm mới nào trong `PageVersionsService` mà (a) tạo
+DRAFT hoặc (b) trả `blocks` ra ngoài, đều phải tuân theo 2 quy tắc trên — không coi 2 hàm hiện có
+(`getOrCreateDraft`, `revertToVersion`) là ngoại lệ đặc biệt.
+
+## 10. Block Picker Preview — Static Thumbnails, Not Live Rendering
 
 **Problem:** `BlockPickerModal` originally only showed an icon + type name per block — users had
 to insert a block blindly, then delete/undo it if it wasn't visually what they expected.

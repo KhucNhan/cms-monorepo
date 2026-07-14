@@ -7,6 +7,7 @@ exports.heroBlock = {
     type: 'hero',
     label: 'Hero Section',
     icon: 'LayoutTemplate',
+    thumbnail: '/block-thumbnails/hero.png',
     schema: schema_1.heroSchema,
     defaultData: {
         title: 'Your compelling headline here',

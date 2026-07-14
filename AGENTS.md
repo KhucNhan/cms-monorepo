@@ -89,6 +89,8 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 | `Role.permissions` = `Json[]`, no `Permission` model | Schema | Query via `role.permissions`, not `role.rolePermissions` |
 | `Page.title` (unversioned, display name) ≠ `PageVersion.seoMeta.title` (versioned, public `<title>`) | Schema | **Do not confuse.** See `ARCHITECTURE-DESIGN.md` Section 6 |
 | `BlockDefinition.thumbnail` is `optional` | Current | Blocks without a `thumbnail` fall back to the Lucide/Material icon in `BlockPickerModal` — not a bug, just not backfilled yet for that block |
+| `PageVersionsService.getOrCreateDraft()` trước đây thiếu `orderBy` + không chống race condition → có thể tạo ra >1 DRAFT/page | Fixed | DB có unique partial index `page_versions_one_draft_per_page` (WHERE status='DRAFT') chặn ở tầng DB; service có `orderBy: createdAt desc` + retry khi bắt lỗi P2002 |
+| `getOrCreateDraft`/`revertToVersion` trả `image.url` (hero) rỗng vì không enrich từ Media | Fixed | `PageVersionsService` inject `BlocksService`, gọi `enrichBlockData()` trước khi trả blocks — xem `apps/admin-api/AGENTS.md` |
 
 ---
 
@@ -114,6 +116,18 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 - `publishedVersionId` = pointer to published version, change it to publish (don't mutate version in place)
 - `Page.title` is unversioned (internal name), `PageVersion.seoMeta.title` is versioned (public SEO title)
 - DRAFT version can be deleted; deleting DRAFT clears all blocks via cascade
+
+### Pages & Versions (bổ sung)
+- **Tối đa 1 DRAFT/page được enforce ở DB** bằng partial unique index
+  (`page_versions_one_draft_per_page`, `WHERE status = 'DRAFT'`), không chỉ dựa vào logic
+  application. Nếu cần thao tác tạo DRAFT ở bất kỳ chỗ nào mới, luôn dùng
+  `PageVersionsService.getOrCreateDraft()` (đã có retry khi thua race), **không** tự viết
+  `create` DRAFT mới mà không check `existing` trước + không bắt lỗi P2002.
+- Mọi hàm trả `PageVersion.blocks` ra ngoài API (`getOrCreateDraft`, `revertToVersion`,
+  `cloneVersionIntoNewDraft`) phải đi qua `enrichVersionBlocks()` (gọi
+  `BlocksService.enrichBlockData()`) để `hero.image.url` được resolve từ `mediaId` — nếu quên,
+  block hero sẽ "mất ảnh" khi vừa vào Edit Mode cho tới khi user tự chọn lại ảnh (từng là bug
+  thật, xem `ARCHITECTURE-DESIGN.md` mục Live Edit Mode).
 
 ### Media
 - Recursive usage check: deleting media scans ALL blocks in ALL versions (DRAFT/PUBLISHED/ARCHIVED) for `mediaId` references
