@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -143,7 +144,20 @@ export class BlocksService {
   }
 
   async update(id: string, dto: UpdateBlockDto) {
-    const block = await this.findOne(id);
+    const block = await this.prisma.block.findUnique({
+      where: { id },
+      include: { pageVersion: { select: { status: true } } },
+    });
+    if (!block) {
+      throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: `Block not found: ${id}` });
+    }
+
+    // DRAFT-only invariant: never mutate a PUBLISHED or ARCHIVED version directly
+    if (block.pageVersion.status !== 'DRAFT') {
+      throw new ConflictException(
+        'Cannot mutate a block that belongs to a non-DRAFT version. Create a draft first.',
+      );
+    }
 
     const updateData: Record<string, unknown> = {};
 

@@ -12,6 +12,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { CsrfGuard } from './common/guards/csrf.guard';
 
 process.on('unhandledRejection', (reason) => {
   console.error('🔥 UNHANDLED REJECTION:', reason);
@@ -46,11 +47,12 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api/v1');
 
-  // CORS — chỉ cho phép admin-web origin trong production
+  // CORS — allow admin-web + public web origins
   app.enableCors({
     origin: process.env['CORS_ORIGIN']?.split(',') ?? [
       'http://localhost:5173',
       'http://localhost:5175',
+      'http://localhost:3000',
     ],
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
@@ -60,6 +62,8 @@ async function bootstrap() {
   // Global filters & interceptors
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
+  // Global CSRF guard — protects all mutating endpoints from cross-site requests
+  app.useGlobalGuards(new CsrfGuard());
 
   // Swagger (dev only)
   if (process.env['NODE_ENV'] !== 'production') {
