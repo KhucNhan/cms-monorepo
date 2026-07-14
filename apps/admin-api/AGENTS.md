@@ -12,6 +12,8 @@
 | Never render HTML | JSON responses only | A task to "make a block look nicer" does not belong in this app |
 | Publish = flip the pointer | `pages.publishedVersionId` | Never UPDATE the currently PUBLISHED version directly |
 | No Passport Guards for Google OAuth callback | `GET /auth/google` and `GET /auth/google/callback` are handled manually in `AuthController`/`AuthService` (redirect + `axios` code exchange) — **not** `@UseGuards(AuthGuard('google'))` | Passport's guard integration is Express-oriented and breaks under this app's Fastify adapter (hangs / 500s). See Section 10. |
+| Mọi hàm trả `PageVersion.blocks` ra API phải enrich qua `BlocksService.enrichBlockData()` | `PageVersionsService.enrichVersionBlocks()` | Quên bước này khiến `hero.image.url` rỗng dù đã chọn ảnh — chỉ có `mediaId` |
+| Tối đa 1 DRAFT/page — enforce ở DB, không chỉ ở code | Partial unique index `page_versions_one_draft_per_page` | Tạo DRAFT phải qua `getOrCreateDraft()` (có retry P2002), không viết `create` DRAFT tay ở chỗ khác |
 
 ## 2. Media Usage Check
 
@@ -22,6 +24,30 @@
 - **Known perf gap**: this function does `findMany` with no `where` clause, then filters
   recursively in JS — gets slower as block count grows. A future optimization should switch to a
   Postgres JSONB query (`data @> ...`) to filter at the DB level.
+
+## 2.1 Page Draft Creation — Race Condition Fix
+
+- `PageVersionsService.getOrCreateDraft(pageId, userId)` là **entry point duy nhất** để lấy/tạo
+  DRAFT cho Live Edit Mode (`POST /pages/:id/draft`). Trước đây có 2 lỗi đã fix:
+  1. **Thiếu `orderBy`** khi tìm DRAFT hiện có → nếu do race condition có >1 DRAFT tồn tại, có
+     thể trả nhầm bản cũ/stale. Đã thêm `orderBy: { createdAt: 'desc' }`.
+  2. **Không chống race condition**: nếu 2 request gọi gần như đồng thời (ví dụ React Strict
+     Mode double-invoke effect ở `apps/web`), cả 2 đều thấy "chưa có DRAFT" rồi cùng tạo mới →
+     2 DRAFT cho cùng 1 page.
+- **Fix ở tầng DB** (đáng tin cậy nhất, migration `..._one_draft_per_page`):
+```sql
+  CREATE UNIQUE INDEX "page_versions_one_draft_per_page"
+  ON "page_versions" ("pageId")
+  WHERE status = 'DRAFT';
+```
+  `getOrCreateDraft()` bọc `cloneVersionIntoNewDraft()` bằng try/catch, bắt
+  `Prisma.PrismaClientKnownRequestError` code `P2002` — khi thua race, refetch lại bản DRAFT vừa
+  được request khác tạo, thay vì để lỗi 500 văng ra ngoài.
+- ⚠️ Nếu migration báo lỗi `P3018`/`23505` khi apply lần đầu, nghĩa là DB **đã có sẵn** page với
+  >1 DRAFT (dữ liệu cũ trước khi có fix). Cần dọn dữ liệu (giữ lại DRAFT mới nhất mỗi page) trước
+  khi áp index — xem script dọn dẹp trong lịch sử PR/agent-session liên quan, không tự ý xóa DRAFT
+  hàng loạt mà không kiểm tra thủ công trước (2 DRAFT trùng có thể có nội dung khác nhau, không
+  phải lúc nào bản mới nhất cũng là bản "đúng").
 
 ## 3. Page Version Endpoints
 
@@ -132,6 +158,10 @@ Every raster upload produces **3 variants**, all converted to **WebP** with **me
 - `rename()`/`delete()` are kept in sync across all 3 variants — no orphaned variant files left
   behind.
 - Install: `pnpm --filter admin-api add sharp`.
+- `BlocksService.enrichBlockData(type, data)` (đang `public`, không phải `private`) được tái sử
+  dụng bởi `PageVersionsService` (`enrichVersionBlocks()`) để resolve `hero.image.url` cho mọi
+  endpoint trả về `PageVersion.blocks`, không chỉ `GET /blocks`. Nếu thêm endpoint mới trả blocks
+  ra ngoài, luôn nhớ enrich — quên bước này là nguyên nhân bug "ảnh biến mất khi vào Edit Mode".
 
 ## 7. Common commands
 
