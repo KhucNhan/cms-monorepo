@@ -33,7 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   });
 
+  console.log('AuthProvider mounted');
+
   useEffect(() => {
+    console.log('effect');
     fetch(`${API_URL}/api/v1/auth/me`, {
       method: 'GET',
       credentials: 'include',
@@ -51,7 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  const Provider = AuthContext.Provider as any;
+  return <Provider value={state}>{children}</Provider>;
 }
 
 export function useAuth(): AuthState {

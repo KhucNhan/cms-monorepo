@@ -1,5 +1,6 @@
 import { faqSchema, type FaqData } from './schema';
 import type { BlockDefinition } from '../../types';
+import { FaqEditor } from './Editor';
 
 export const faqBlock: BlockDefinition<typeof faqSchema> = {
   type: 'faq',
@@ -17,6 +18,8 @@ export const faqBlock: BlockDefinition<typeof faqSchema> = {
     ],
     allowMultipleOpen: false,
   } satisfies FaqData,
+  Editor: FaqEditor,
 };
 
 export { faqSchema, type FaqData };
+export type { FaqItem } from './schema';

@@ -5,7 +5,7 @@ import { RichTextBlock } from './RichTextBlock';
 import { FaqBlock } from './FaqBlock';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyBlockComponent = ComponentType<{ data: any }>;
+type AnyBlockComponent = (props: { data: any }) => any;
 
 const registry: Record<BlockType, AnyBlockComponent> = {
   hero: HeroBlock,

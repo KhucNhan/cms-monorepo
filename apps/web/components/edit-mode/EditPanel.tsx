@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { MediaPicker } from './MediaPicker';
 import { BlockPickerModal } from './BlockPickerModal';
 import { ConfirmDialog } from './ConfirmDialog';
+import { BlockDataForm } from './block-editors/BlockDataForm';
 import type { Block } from '@/types';
 
 interface EditPanelProps {
@@ -66,38 +67,6 @@ function DragHandleIcon({ className }: { className?: string }) {
       <circle cx="16" cy="18" r="1.5" />
     </svg>
   );
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function extractPlainText(content: Record<string, any> | undefined): string {
-  const paragraphs = content?.content ?? [];
-  return paragraphs
-    .map((p: any) =>
-      (p.content ?? []).map((t: any) => t.text ?? '').join(''),
-    )
-    .join('\n');
-}
-
-function buildRichTextFromPlainText(text: string) {
-  const lines = text.split('\n');
-  return {
-    content: {
-      type: 'doc',
-      content: lines.map((line) => ({
-        type: 'paragraph',
-        content: line ? [{ type: 'text', text: line }] : [],
-      })),
-    },
-    htmlFallback: lines.map((line) => `<p>${escapeHtml(line)}</p>`).join(''),
-  };
 }
 
 export function EditPanel({
@@ -196,8 +165,9 @@ export function EditPanel({
 
               {isExpanded && (
                 <div className="border-t bg-white p-3">
-                  <BlockForm
-                    block={block}
+                  <BlockDataForm
+                    type={block.type}
+                    data={block.data ?? {}}
                     onChange={(data) => onChangeBlockData(block.id, data)}
                     onOpenMediaPicker={() => setPickerFor(block.id)}
                   />
@@ -272,177 +242,5 @@ export function EditPanel({
         </div>
       </div>
     </div>
-  );
-}
-
-function BlockForm({
-  block,
-  onChange,
-  onOpenMediaPicker,
-}: {
-  block: Block;
-  onChange: (data: Record<string, unknown>) => void;
-  onOpenMediaPicker: () => void;
-}) {
-  const data = (block.data ?? {}) as Record<string, any>;
-
-  // ── Hero — matches packages/block-registry/src/blocks/hero/schema.ts ──
-  if (block.type === 'hero') {
-    const image = data.image ?? { mediaId: '', alt: '', url: '' };
-    return (
-      <div className="space-y-3 text-sm">
-        <Field label="Title">
-          <input
-            className="w-full rounded border px-2 py-1"
-            value={data.title ?? ''}
-            onChange={(e) => onChange({ ...data, title: e.target.value })}
-          />
-        </Field>
-        <Field label="Subtitle">
-          <textarea
-            className="w-full rounded border px-2 py-1"
-            rows={2}
-            value={data.subtitle ?? ''}
-            onChange={(e) => onChange({ ...data, subtitle: e.target.value })}
-          />
-        </Field>
-        <Field label="Image">
-          <div className="flex items-center gap-2">
-            {image.url && <img src={image.url} alt={image.alt ?? ''} className="h-12 w-12 rounded object-cover" />}
-            <button
-              onClick={onOpenMediaPicker}
-              className="rounded bg-gray-100 px-2 py-1 text-xs font-medium hover:bg-gray-200"
-            >
-              Choose image
-            </button>
-          </div>
-        </Field>
-        <Field label="Image alt text">
-          <input
-            className="w-full rounded border px-2 py-1"
-            value={image.alt ?? ''}
-            onChange={(e) => onChange({ ...data, image: { ...image, alt: e.target.value } })}
-          />
-        </Field>
-        <Field label="Button text">
-          <input
-            className="w-full rounded border px-2 py-1"
-            value={data.buttonText ?? ''}
-            onChange={(e) => onChange({ ...data, buttonText: e.target.value })}
-          />
-        </Field>
-        <Field label="Button link">
-          <input
-            className="w-full rounded border px-2 py-1"
-            value={data.buttonHref ?? ''}
-            onChange={(e) => onChange({ ...data, buttonHref: e.target.value })}
-          />
-        </Field>
-        <Field label="Text alignment">
-          <select
-            className="w-full rounded border px-2 py-1"
-            value={data.alignment ?? 'center'}
-            onChange={(e) => onChange({ ...data, alignment: e.target.value })}
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-        </Field>
-        <Field label={`Overlay opacity (${data.overlayOpacity ?? 40}%)`}>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            className="w-full"
-            value={data.overlayOpacity ?? 40}
-            onChange={(e) => onChange({ ...data, overlayOpacity: Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-    );
-  }
-
-  // ── Rich Text — matches schema.ts: `content` is ProseMirror JSON, `htmlFallback` is
-  // the sanitized HTML actually rendered by apps/web. There is no TipTap editor in
-  // apps/web (deliberately not bundled — see plan), so this is a simplified raw-HTML
-  // editor: it edits `htmlFallback` directly and wraps it in a minimal single-node
-  // `content` doc so the block stays schema-valid. This does NOT round-trip through
-  // a real rich-text editor; if full WYSIWYG editing is needed later, that requires
-  // bundling TipTap here too — flag as a known limitation, not a bug.
-  // EditPanel.tsx — trong BlockForm, case 'rich-text'
-  if (block.type === 'rich-text') {
-    const plainText = extractPlainText(data.content);
-    return (
-        <Field label="Text content">
-        <textarea
-            className="w-full rounded border px-2 py-1 text-xs"
-            rows={10}
-            value={plainText}
-            onChange={(e) => {
-            const { content, htmlFallback } = buildRichTextFromPlainText(e.target.value);
-            onChange({ ...data, content, htmlFallback });
-            }}
-        />
-        </Field>
-    );
-    }
-
-  // ── FAQ — matches schema.ts ──
-  if (block.type === 'faq') {
-    const items: Array<{ question: string; answer: string }> = data.items ?? [];
-    return (
-      <div className="space-y-3 text-sm">
-        <Field label="Heading">
-          <input
-            className="w-full rounded border px-2 py-1"
-            value={data.heading ?? ''}
-            onChange={(e) => onChange({ ...data, heading: e.target.value })}
-          />
-        </Field>
-        {items.map((item, i) => (
-          <div key={i} className="rounded border p-2">
-            <input
-              className="mb-1 w-full rounded border px-2 py-1"
-              placeholder="Question"
-              value={item.question}
-              onChange={(e) => {
-                const next = [...items];
-                next[i] = { ...next[i], question: e.target.value };
-                onChange({ ...data, items: next });
-              }}
-            />
-            <textarea
-              className="w-full rounded border px-2 py-1"
-              placeholder="Answer"
-              rows={2}
-              value={item.answer}
-              onChange={(e) => {
-                const next = [...items];
-                next[i] = { ...next[i], answer: e.target.value };
-                onChange({ ...data, items: next });
-              }}
-            />
-          </div>
-        ))}
-        <button
-          onClick={() => onChange({ ...data, items: [...items, { question: '', answer: '' }] })}
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-        >
-          + Add question
-        </button>
-      </div>
-    );
-  }
-
-  return <p className="text-xs text-gray-400">Block type "{block.type}" has no dedicated editor in apps/web.</p>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
-      {children}
-    </label>
   );
 }
