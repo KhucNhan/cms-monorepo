@@ -24,14 +24,34 @@ import { loginSchema, type LoginDto } from './dto/auth.dto';
 import type { JwtPayload } from '@cms/shared-types';
 
 const REFRESH_COOKIE = 'cms_refresh_token';
+const ACCESS_COOKIE = 'access_token';
 
-const cookieOptions = {
+const refreshCookieOptions = {
   httpOnly: true,
   secure: process.env['NODE_ENV'] === 'production',
   sameSite: 'lax' as const,
   path: '/api/v1/auth/refresh',
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
+
+/** Returns cookie options for access_token from env vars — different in dev vs prod */
+function accessCookieOptions(): {
+  domain?: string;
+  path: string;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'none';
+  maxAge: number;
+} {
+  return {
+    domain: process.env['COOKIE_DOMAIN'] || undefined,
+    path: '/',
+    httpOnly: true,
+    secure: process.env['COOKIE_SECURE'] === 'true',
+    sameSite: (process.env['COOKIE_SAMESITE'] ?? 'lax') as 'lax' | 'none',
+    maxAge: 15 * 60 * 1000, // 15 min — matches JWT access token expiry
+  };
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -60,7 +80,9 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const { accessToken, refreshToken } = await this.authService.login(dto);
-    reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions);
+    reply.setCookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    // Set access_token cookie so apps/web on the same root domain can send it automatically
+    reply.setCookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
     return { accessToken };
   }
 
@@ -96,14 +118,14 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     await this.authService.logout(req.user.sub);
-    reply.clearCookie(REFRESH_COOKIE, { path: cookieOptions.path });
+    reply.clearCookie(REFRESH_COOKIE, { path: refreshCookieOptions.path });
+    reply.clearCookie(ACCESS_COOKIE, { path: '/', domain: process.env['COOKIE_DOMAIN'] || undefined });
     return { message: 'Logged out successfully' };
   }
 
-  @Post('me')
-  @HttpCode(HttpStatus.OK)
+  @Get('me')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get current authenticated user info' })
+  @ApiOperation({ summary: 'Get current authenticated user info (works with cookie or Bearer token)' })
   me(@Req() req: FastifyRequest & { user: JwtPayload }) {
     return req.user;
   }
@@ -155,7 +177,9 @@ export class AuthController {
     }
 
     const { accessToken, refreshToken } = await this.authService.loginWithGoogle(req.user);
-    reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions);
+    reply.setCookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    // Also set shared access_token cookie so apps/web picks it up
+    reply.setCookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
     return reply.code(302).redirect(`${frontendUrl}/auth/callback#token=${accessToken}`);
   }
 }

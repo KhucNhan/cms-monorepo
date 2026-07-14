@@ -636,18 +636,33 @@ export function PageEditPage() {
           
           {/* Header */}
           <div className="flex justify-between items-center mb-md">
-            <div>
+            <div className='flex-1'>
               <div className="flex items-center gap-sm">
-                <h1 className="text-h1 font-h1 text-on-background">Page Sections</h1>
-                <span
-                  className={`px-sm py-0.5 rounded-full text-label-sm font-bold ${
-                    isDraftStatus
-                      ? 'bg-outline-variant/30 text-on-surface-variant'
-                      : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  {isDraftStatus ? 'DRAFT' : 'PUBLISHED'}
-                </span>
+                <div className='flex items-center gap-sm flex-1'>
+                  <h1 className="text-h1 font-h1 text-on-background">Page Sections</h1>
+                  <span
+                    className={`px-sm py-0.5 rounded-full text-label-sm font-bold ${
+                      isDraftStatus
+                        ? 'bg-outline-variant/30 text-on-surface-variant'
+                        : 'bg-primary/10 text-primary'
+                    }`}
+                  >
+                    {isDraftStatus ? 'DRAFT' : 'PUBLISHED'}
+                  </span>
+                </div>
+                {page?.slug && (
+                  <Button
+                    variant="ghost"
+                    icon="open_in_new"
+                    onClick={() => {
+                      const webUrl = import.meta.env.VITE_WEB_URL ?? 'http://localhost:3000';
+                      const slug = page.slug === 'homepage' ? '' : page.slug;
+                      window.open(`${webUrl}/${slug}`, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    Open on Public Site
+                  </Button>
+                )}
               </div>
               <p className="text-body-md text-on-surface-variant mt-xs">
                 Edit block contents and manage the layout structure of page{' '}

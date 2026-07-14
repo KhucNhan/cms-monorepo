@@ -11,6 +11,7 @@
 | Tailwind v3.4 | CommonJS `tailwind.config.js`, `theme.extend` — don't use v4's `@theme` syntax. |
 | `@cms/block-registry` aliased straight to `src/` | Via `vite.config.ts` (`resolve.alias`) — editing block-registry doesn't need a rebuild, just refresh the dev server. |
 | Register new block editors via `registry.ts` | **Never** add `switch (block.type)` in `BlockPickerModal.tsx` or anywhere else in this app. |
+| Google login must update `AuthContext` in-place | `GoogleCallbackPage.tsx` MUST call `AuthContext`'s `loginWithToken(token)` — never just store the token and separately call `authApi.me()`. See Section 8.1. |
 
 **Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
 `Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
@@ -128,6 +129,28 @@ state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as
   from the permission set via `usePermissions()` (the JWT currently only carries `roleId`, no
   role name — if the backend later adds a role name to `/auth/me`, switch to reading it directly
   instead of inferring it).
+
+### 8.1 Google Login callback — must update `AuthContext` in-place
+
+`GoogleCallbackPage.tsx` receives the access token as a URL fragment
+(`/auth/callback#token=...`, set by `admin-api`'s `AuthController.googleCallback` redirect — see
+`apps/admin-api/AGENTS.md`, Section 10) and must log the user in **synchronously with context
+state**, not just token storage.
+
+- **Bug that existed before this was fixed**: the page stored the token via
+  `tokenStorage.set(token)` and called `authApi.me()` directly, but never pushed the result into
+  `AuthContext`'s `user` state. So `AuthContext.isAuthenticated` stayed `false` even though a
+  valid token was on disk. Navigating to `/dashboard` right after made `ProtectedRoute` see
+  `isAuthenticated: false` and bounce the user straight back to `/login`. It only "worked" on a
+  second load/refresh, because `AuthContext`'s mount-time hydration check would then find the
+  token and log in properly — making the bug easy to miss in quick manual testing.
+- **Fix**: `AuthContext.tsx` exposes `loginWithToken(token: string)`, which stores the token,
+  fetches `/auth/me`, and updates `user` state in one call. `GoogleCallbackPage.tsx` calls
+  **only** this method, then navigates to `/dashboard`.
+- **Rule for future auth-adjacent pages**: any page that receives a token out-of-band (OAuth
+  redirect, magic link, etc.) must route through a single `AuthContext` method that both persists
+  the token and updates in-memory `user` state before navigating away — never split "store token"
+  and "fetch + use user info" across two separate calls from outside `AuthContext`.
 
 ## 9. Common commands
 

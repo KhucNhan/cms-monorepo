@@ -101,4 +101,14 @@ export class PagesController {
   ) {
     return this.pagesService.createDraftVersion(pageId, versionId, req.user.sub);
   }
+
+  @Post(':id/draft')
+  @RequirePermissions('page:update')
+  @ApiOperation({ summary: 'Get existing DRAFT or create one from published version (Live Edit Mode entry)' })
+  getOrCreateDraft(
+    @Param('id') pageId: string,
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.pageVersionsService.getOrCreateDraft(pageId, req.user.sub);
+  }
 }
