@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from './edit-mode/AuthProvider';
+import { useViewport, type ViewportPreset } from './edit-mode/ViewportContext';
 
 interface AdminNavbarProps {
   /** Current page slug — shown in the admin bar for context */
@@ -9,6 +10,12 @@ interface AdminNavbarProps {
   editMode: boolean;
   onToggleEdit: () => void;
 }
+
+const VIEWPORT_PRESETS: { key: ViewportPreset; label: string; icon: string }[] = [
+  { key: 'mobile', label: 'Mobile', icon: 'smartphone' },
+  { key: 'tablet', label: 'Tablet', icon: 'tablet_mac' },
+  { key: 'desktop', label: 'Desktop', icon: 'desktop_windows' },
+];
 
 /**
  * AdminNavbar — floating admin action bar shown at the top of the public site
@@ -21,6 +28,14 @@ export function AdminNavbar({ slug, editMode, onToggleEdit }: AdminNavbarProps) 
   const { permissions } = useAuth();
   const canEdit = permissions.includes('page:update');
 
+  // Viewport switcher đọc/ghi qua ViewportContext (bọc ở layout.tsx) thay vì props —
+  // AdminNavbar và EditModeLayout/PagePreview là 2 nhánh anh em dưới layout.tsx,
+  // không có quan hệ cha-con nên không thể truyền props trực tiếp xuống nhau.
+  const { preset, activeWidth, setPreset } = useViewport();
+
+  // Chỉ hiện viewport switcher khi đang edit mode — không có ý nghĩa lúc xem site bình thường.
+  const showViewportSwitcher = editMode;
+
   return (
     <div
       role="banner"
@@ -30,10 +45,7 @@ export function AdminNavbar({ slug, editMode, onToggleEdit }: AdminNavbarProps) 
     >
       {/* CMS badge */}
       <span className="flex items-center gap-1.5 font-semibold text-xs tracking-wide uppercase text-white/60">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-          <rect width="12" height="12" rx="3" fill="#6366f1" />
-          <path d="M3 6h6M6 3v6" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
+        <span className="material-symbols-outlined text-[14px] text-indigo-400">dashboard</span>
         CMS
       </span>
 
@@ -44,6 +56,35 @@ export function AdminNavbar({ slug, editMode, onToggleEdit }: AdminNavbarProps) 
         <span className="text-white/50 font-mono text-xs max-w-[160px] truncate" title={`/${slug}`}>
           /{slug}
         </span>
+      )}
+
+      {showViewportSwitcher && (
+        <>
+          <span className="w-px h-4 bg-white/20" aria-hidden />
+
+          <div className="flex items-center gap-0.5" role="group" aria-label="Viewport size">
+            {VIEWPORT_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPreset(p.key)}
+                title={p.label}
+                aria-pressed={preset === p.key}
+                className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
+                  preset === p.key
+                    ? 'bg-indigo-500 text-white'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[15px]">{p.icon}</span>
+              </button>
+            ))}
+
+            <span className="ml-1 min-w-[52px] text-center text-[11px] tabular-nums text-white/40">
+              {activeWidth ? `${Math.round(activeWidth)}px` : 'Full'}
+            </span>
+          </div>
+        </>
       )}
 
       {canEdit && (
@@ -59,12 +100,9 @@ export function AdminNavbar({ slug, editMode, onToggleEdit }: AdminNavbarProps) 
               }`}
             aria-pressed={editMode}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              {editMode
-                ? <path d="M18 6L6 18M6 6l12 12" />
-                : <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>
-              }
-            </svg>
+            <span className="material-symbols-outlined text-[14px]">
+              {editMode ? 'close' : 'edit'}
+            </span>
             {editMode ? 'Exit Edit' : 'Edit'}
           </button>
         </>

@@ -43,6 +43,14 @@ export interface BlockEditorProps<T = Record<string, unknown>> {
    * apps/web: MediaPicker) và khi chọn xong sẽ gọi onChange với image mới.
    */
   onOpenMediaPicker?: () => void;
+  /**
+   * Host app đang render editor này là ai:
+   * - 'admin' (mặc định): admin-web — giữ nguyên layout/kích thước hiện tại (grid nhiều cột).
+   * - 'web': apps/web — layout dồn thành 1 cột dọc, input/text nhỏ hơn (không gian edit-mode
+   *   trên trang public hẹp hơn panel admin).
+   * Không truyền = coi như 'admin' để không phá vỡ code admin-web hiện có.
+   */
+  variant?: 'admin' | 'web';
 }
 
 // Props cho Renderer component của mỗi block

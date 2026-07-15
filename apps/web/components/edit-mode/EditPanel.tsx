@@ -30,42 +30,28 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
   faq: 'FAQ',
 };
 
+// Thống nhất icon dùng Material Symbols Outlined — cùng bộ icon với các block Editor
+// dùng chung trong packages/block-registry (FaqEditor/HeroEditor dùng
+// <span className="material-symbols-outlined">...</span>), thay vì SVG riêng như trước.
 function TrashIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
-      />
-    </svg>
+    <span className={`material-symbols-outlined ${className ?? ''}`}>delete</span>
   );
 }
 
 function ChevronIcon({ open, className }: { open: boolean; className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      className={`transition-transform ${open ? 'rotate-90' : ''} ${className ?? ''}`}
+    <span
+      className={`material-symbols-outlined transition-transform ${open ? 'rotate-90' : ''} ${className ?? ''}`}
     >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
-    </svg>
+      chevron_right
+    </span>
   );
 }
 
 function DragHandleIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <circle cx="8" cy="6" r="1.5" />
-      <circle cx="8" cy="12" r="1.5" />
-      <circle cx="8" cy="18" r="1.5" />
-      <circle cx="16" cy="6" r="1.5" />
-      <circle cx="16" cy="12" r="1.5" />
-      <circle cx="16" cy="18" r="1.5" />
-    </svg>
+    <span className={`material-symbols-outlined ${className ?? ''}`}>drag_indicator</span>
   );
 }
 
@@ -147,8 +133,8 @@ export function EditPanel({
                 }`}
               >
                 <span className="flex items-center gap-1 font-medium">
-                  <DragHandleIcon className="h-4 w-4 cursor-grab text-gray-300 hover:text-gray-500" />
-                  <ChevronIcon open={isExpanded} className="h-3.5 w-3.5 text-gray-400" />
+                  <DragHandleIcon className="text-[18px] cursor-grab text-gray-300 hover:text-gray-500" />
+                  <ChevronIcon open={isExpanded} className="text-[16px] text-gray-400" />
                   {BLOCK_TYPE_LABELS[block.type] ?? block.type}
                 </span>
                 <button
@@ -159,7 +145,7 @@ export function EditPanel({
                   className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
                   aria-label="Delete block"
                 >
-                  <TrashIcon className="h-4 w-4" />
+                  <TrashIcon className="text-[18px]" />
                 </button>
               </div>
 

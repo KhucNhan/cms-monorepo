@@ -43,5 +43,12 @@ export function BlockDataForm({ type, data, onChange, onOpenMediaPicker }: Block
     return <JsonFallbackEditor value={data} onChange={onChange} />;
   }
 
-  return <Editor value={data} onChange={onChange} onOpenMediaPicker={onOpenMediaPicker} />;
+  return (
+    <Editor
+      value={data}
+      onChange={onChange}
+      onOpenMediaPicker={onOpenMediaPicker}
+      variant="web"
+    />
+  );
 }
