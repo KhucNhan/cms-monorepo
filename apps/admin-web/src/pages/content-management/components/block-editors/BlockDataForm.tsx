@@ -1,16 +1,13 @@
 // apps/admin-web/src/pages/content-management/components/BlockDataForm.tsx
 //
-// Editor UI giờ lấy từ packages/block-registry (dùng chung với apps/web).
-// File cũ HeroBlockEditor.tsx / FaqBlockEditor.tsx / RichTextBlockEditor.tsx /
-// JsonBlockEditor.tsx trong thư mục block-editors/ có thể XOÁ sau khi xác nhận
-// build pass — không còn được import ở đâu nữa.
-//
-// Media picker: hero cần onOpenMediaPicker, admin-web tự quản lý modal
-// (MediaPickerModal + mediaApi) — khác biệt so với apps/web ở tầng data,
-// nhưng Editor dùng chung không quan tâm việc đó.
+// Editor UI lấy từ '@cms/block-registry/editors' (subpath RIÊNG, chỉ 2 app frontend
+// dùng — KHÔNG phải '@cms/block-registry' gốc, vì gốc bị admin-api import gián tiếp
+// qua schema-only.ts → registry.ts. getBlockDefinition() (metadata: label, icon,
+// schema, defaultData) vẫn lấy từ '@cms/block-registry' gốc như cũ vì không chứa React.
 
 import { useState, useEffect } from 'react';
-import { getBlockDefinition, JsonFallbackEditor } from '@cms/block-registry';
+import { getBlockDefinition } from '@cms/block-registry';
+import { getBlockEditor, JsonFallbackEditor } from '@cms/block-registry/editors';
 import { MediaPickerModal } from '@/pages/media-library/components/MediaPickerModal';
 import { mediaApi } from '@/api/media.api';
 import type { MediaItem } from '@/types';
@@ -31,7 +28,8 @@ export function BlockDataForm({ type, data, onChange }: BlockDataFormProps) {
   const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null);
 
   const normalizedType = normalizeBlockType(type);
-  const mediaId: string | undefined = data?.image?.mediaId;
+  const safeData = data ?? {};
+  const mediaId: string | undefined = safeData?.image?.mediaId;
 
   // Resolve preview url từ mediaId cho hero (giữ lại hành vi cũ: ưu tiên thumbUrl,
   // vì url gốc có thể đã bị strip khi lưu — xem HeroBlockEditor cũ / MediaService).
@@ -55,9 +53,9 @@ export function BlockDataForm({ type, data, onChange }: BlockDataFormProps) {
   }, [normalizedType, mediaId]);
 
   const handleSelectMedia = (media: MediaItem) => {
-    const currentImage = data.image ?? {};
+    const currentImage = safeData.image ?? {};
     onChange({
-      ...data,
+      ...safeData,
       image: {
         mediaId: media.id,
         url: media.url,
@@ -68,25 +66,30 @@ export function BlockDataForm({ type, data, onChange }: BlockDataFormProps) {
     setShowPicker(false);
   };
 
-  let definition;
+  // Chỉ dùng getBlockDefinition() để xác nhận type hợp lệ / lấy metadata — không
+  // đọc .Editor từ đây nữa, vì registry.ts không còn gán Editor (xem
+  // packages/block-registry/src/blocks/*/index.ts). Editor lấy riêng qua
+  // getBlockEditor() từ subpath '/editors'.
+  let isKnownType = false;
   try {
-    definition = getBlockDefinition(normalizedType);
+    getBlockDefinition(normalizedType);
+    isKnownType = true;
   } catch {
-    definition = null;
+    isKnownType = false;
   }
 
-  const Editor = definition?.Editor;
+  const Editor = isKnownType ? getBlockEditor(normalizedType) : undefined;
 
   if (!Editor) {
-    return <JsonFallbackEditor value={data} onChange={onChange} />;
+    return <JsonFallbackEditor value={safeData} onChange={onChange} />;
   }
 
   // Với hero, merge resolvedImageUrl vào value.image.url trước khi truyền xuống Editor
   // dùng chung — Editor không tự resolve, chỉ hiển thị url đã có sẵn.
   const value =
-    normalizedType === 'hero' && data?.image
-      ? { ...data, image: { ...data.image, url: resolvedImageUrl ?? data.image.url } }
-      : data;
+    normalizedType === 'hero' && safeData?.image
+      ? { ...safeData, image: { ...safeData.image, url: resolvedImageUrl ?? safeData.image.url } }
+      : safeData;
 
   return (
     <>

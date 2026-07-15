@@ -9,11 +9,19 @@ import type { ZodSchema, z } from 'zod';
  *
  * - `schema`:      Zod schema, pure, không phụ thuộc React → NestJS import được.
  * - `defaultData`: giá trị ban đầu khi tạo block mới, phải pass schema.
- * - `Editor`:      React component dùng trong admin-web (optional — backend không cần).
+ * - `Editor`:      React component DÙNG CHUNG cho admin-web VÀ apps/web (Live Edit Mode).
+ *                  Phải là React thuần + Tailwind class phổ quát — KHÔNG được import
+ *                  class-variance-authority, radix-ui, hay bất kỳ token màu riêng của
+ *                  admin-web (bg-surface, text-on-surface, ...) vì apps/web không có
+ *                  các token đó. Vi phạm điều này sẽ làm UI vỡ ở apps/web.
  * - `Renderer`:    React component dùng trong Next.js web (optional — backend không cần).
  *
- * Import path `@cms/block-registry/schema-only` chỉ export schema + defaultData,
- * không kéo React vào môi trường Node.
+ * ⚠️ QUAN TRỌNG: `admin-api` (NestJS, Node thuần) KHÔNG BAO GIỜ được import package này
+ * qua đường dẫn gốc (`@cms/block-registry`) — vì file này (`blocks/index.ts`) giờ có
+ * import React (Editor.tsx). admin-api phải luôn import qua
+ * @cms/block-registry/schema-only, chỉ export schema + defaultData, không kéo
+ * React vào runtime Node. Nếu thấy admin-api import trực tiếp từ gốc package này,
+ * đó là lỗi kiến trúc cần sửa ngay, không phải việc bình thường.
  */
 export interface BlockDefinition<S extends ZodSchema = ZodSchema> {
   type: string;
@@ -31,25 +39,18 @@ export interface BlockDefinition<S extends ZodSchema = ZodSchema> {
   Renderer?: any;
 }
 
-// Props cho Editor component của mỗi block
+// Props cho Editor component của mỗi block — DÙNG CHUNG giữa admin-web và apps/web.
 export interface BlockEditorProps<T = Record<string, unknown>> {
   value: T;
   onChange: (next: T) => void;
   errors?: Record<string, string[]>;
   /**
-   * Callback để mở media picker — do host app cung cấp.
-   * Hero Editor sẽ gọi hàm này khi user click "Choose image".
-   * Host app tự quyết định dùng modal nào (admin-web: MediaPickerModal,
-   * apps/web: MediaPicker) và khi chọn xong sẽ gọi onChange với image mới.
+   * Optional: chỉ block nào cần chọn ảnh (hiện tại: hero) mới dùng field này.
+   * Editor KHÔNG tự mở modal chọn media — mỗi app (admin-web / apps/web) có data-layer
+   * và modal picker riêng (mediaApi + React state vs raw fetch), nên Editor chỉ gọi
+   * callback này để app cha tự mở picker của mình rồi trả kết quả qua `onChange`.
    */
   onOpenMediaPicker?: () => void;
-  /**
-   * Host app đang render editor này là ai:
-   * - 'admin' (mặc định): admin-web — giữ nguyên layout/kích thước hiện tại (grid nhiều cột).
-   * - 'web': apps/web — layout dồn thành 1 cột dọc, input/text nhỏ hơn (không gian edit-mode
-   *   trên trang public hẹp hơn panel admin).
-   * Không truyền = coi như 'admin' để không phá vỡ code admin-web hiện có.
-   */
   variant?: 'admin' | 'web';
 }
 

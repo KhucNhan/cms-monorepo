@@ -4,15 +4,39 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+
   resolve: {
-    // Ưu tiên .ts/.tsx trước .js để tránh Vite load file CJS compiled thay vì TypeScript source
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@cms/block-registry': path.resolve(__dirname, '../../packages/block-registry/src/registry.ts'),
-      '@cms/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
-    },
+
+    alias: [
+      {
+        find: /^@cms\/block-registry\/editors$/,
+        replacement: path.resolve(
+          __dirname,
+          '../../packages/block-registry/src/editors.ts',
+        ),
+      },
+      {
+        find: /^@cms\/block-registry$/,
+        replacement: path.resolve(
+          __dirname,
+          '../../packages/block-registry/src/index.ts',
+        ),
+      },
+      {
+        find: /^@cms\/shared-types$/,
+        replacement: path.resolve(
+          __dirname,
+          '../../packages/shared-types/src/index.ts',
+        ),
+      },
+      {
+        find: '@',
+        replacement: path.resolve(__dirname, './src'),
+      },
+    ],
   },
+
   server: {
     port: 5173,
     proxy: {
@@ -26,6 +50,7 @@ export default defineConfig({
       },
     },
   },
+
   preview: {
     host: '0.0.0.0',
     port: 4173,

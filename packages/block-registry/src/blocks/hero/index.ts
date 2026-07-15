@@ -1,6 +1,5 @@
 import { heroSchema, type HeroData } from './schema';
 import type { BlockDefinition } from '../../types';
-import { HeroEditor } from './Editor';
 
 export const heroBlock: BlockDefinition<typeof heroSchema> = {
   type: 'hero',
@@ -17,7 +16,6 @@ export const heroBlock: BlockDefinition<typeof heroSchema> = {
     alignment: 'center',
     overlayOpacity: 40,
   } satisfies HeroData,
-  Editor: HeroEditor,
 };
 
 export { heroSchema, type HeroData };
