@@ -11,6 +11,8 @@
 | `render-blocks.tsx` maps `block[]` → Renderer via the registry | Adding a new block type does **not** require editing this file (the registry supplies it automatically). |
 | `tailwind.config.js` is nearly empty (`theme.extend: {}`) | `admin-web`'s Material You color tokens haven't been synced here — see the gap noted in `apps/admin-web/AGENTS.md`, "Known gap" section. |
 | Main dynamic route: `app/[slug]/page.tsx` | Revalidated via webhook `app/api/revalidate/route.ts` when admin-api publishes — don't add a separate parallel caching mechanism. |
+| `BlockDataForm.tsx` lấy Editor qua `@cms/block-registry/editors` (`getBlockEditor()`), không đọc `getBlockDefinition().Editor` | Chi tiết + lý do tách: `packages/block-registry/AGENTS.md` |
+| `tailwind.config.js` dùng chung token Material You với `admin-web` (đã đồng bộ 2026-07) | Đồng bộ thủ công, chưa có preset dùng chung — khi `admin-web` đổi màu/token phải copy tay sang đây, xem `packages/block-registry/AGENTS.md` phần Tailwind |
 
 ## Common commands
 

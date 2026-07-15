@@ -91,6 +91,8 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 | `BlockDefinition.thumbnail` is `optional` | Current | Blocks without a `thumbnail` fall back to the Lucide/Material icon in `BlockPickerModal` — not a bug, just not backfilled yet for that block |
 | `PageVersionsService.getOrCreateDraft()` trước đây thiếu `orderBy` + không chống race condition → có thể tạo ra >1 DRAFT/page | Fixed | DB có unique partial index `page_versions_one_draft_per_page` (WHERE status='DRAFT') chặn ở tầng DB; service có `orderBy: createdAt desc` + retry khi bắt lỗi P2002 |
 | `getOrCreateDraft`/`revertToVersion` trả `image.url` (hero) rỗng vì không enrich từ Media | Fixed | `PageVersionsService` inject `BlocksService`, gọi `enrichBlockData()` trước khi trả blocks — xem `apps/admin-api/AGENTS.md` |
+| `packages/block-registry`: Editor component tách khỏi `registry.ts`, nằm ở `src/editors.ts` (subpath `@cms/block-registry/editors`) | Current | Không đọc `getBlockDefinition(type).Editor` nữa — dùng `getBlockEditor(type)`. Chi tiết + checklist thêm block: `packages/block-registry/AGENTS.md` |
+| `@types/react`/`@types/react-dom` phải pin cứng cùng version, khớp root `pnpm.overrides` | Current | Lệch version (kể cả cùng major) gây lỗi JSX toàn app dù `tsc` package con không báo gì. Chi tiết: `packages/block-registry/AGENTS.md` |
 
 ---
 
