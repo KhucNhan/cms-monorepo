@@ -207,17 +207,19 @@ export function EditPanel({
           /{slug} {dirty && <span className="text-amber-600">• unsaved changes</span>}
         </div>
         {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-        <div className="flex gap-2">
-          <button onClick={onClose} className="rounded px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
-            Close
-          </button>
-          <button
-            onClick={onSaveDraft}
-            disabled={saving || !dirty}
-            className="flex-1 rounded bg-gray-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save Draft'}
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className='flex gap-2'>
+            <button onClick={onClose} className="rounded w-[50%] px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+                Close
+            </button>
+            <button
+                onClick={onSaveDraft}
+                disabled={saving || !dirty}
+                className="flex-1 rounded bg-gray-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+            >
+                {saving ? 'Saving…' : 'Save Draft'}
+            </button>
+          </div>
           <button
             onClick={onPublish}
             disabled={saving}

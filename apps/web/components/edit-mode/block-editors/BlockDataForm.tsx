@@ -48,10 +48,9 @@ export function BlockDataForm({ type, data, onChange, onOpenMediaPicker }: Block
     return <JsonFallbackEditor value={safeData} onChange={onChange} />;
   }
 
-  // Lưu ý: prop `variant="web"` ở bản trước đã bị bỏ — Editor dùng chung
   // (BlockEditorProps trong packages/block-registry/src/types.ts) không định nghĩa
   // prop này, nên nó không có tác dụng gì (React chỉ âm thầm bỏ qua prop lạ). Nếu
   // thực sự cần phân biệt hành vi theo app (admin-web vs apps/web), phải thêm
   // `variant` vào BlockEditorProps dùng chung trước, rồi mới truyền ở đây.
-  return <Editor value={safeData} onChange={onChange} onOpenMediaPicker={onOpenMediaPicker} />;
+  return <Editor variant="web" value={safeData} onChange={onChange} onOpenMediaPicker={onOpenMediaPicker} />;
 }

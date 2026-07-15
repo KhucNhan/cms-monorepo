@@ -68,7 +68,7 @@ export function HeroEditor({
     <div
       className={
         isWeb
-          ? 'flex flex-col gap-sm'
+          ? 'flex flex-col gap-2'
           : 'grid grid-cols-1 gap-md md:grid-cols-2'
       }
     >
@@ -201,8 +201,8 @@ export function HeroEditor({
             <div
               className={
                 isWeb
-                  ? 'aspect-video w-full overflow-hidden rounded-md border border-outline-variant bg-surface-container'
-                  : 'aspect-video w-full overflow-hidden rounded-lg border border-outline-variant bg-surface-container sm:w-48'
+                  ? 'aspect-video w-full my-1 overflow-hidden border border-outline-variant bg-surface-container'
+                  : 'aspect-video w-full overflow-hidden border border-outline-variant bg-surface-container sm:w-48'
               }
             >
               <img
@@ -214,16 +214,6 @@ export function HeroEditor({
             </div>
 
             <div className="flex flex-1 flex-col gap-xs">
-              <p
-                className={
-                  isWeb
-                    ? 'truncate font-mono text-[10px] text-on-surface-variant'
-                    : 'truncate font-mono text-label-sm text-on-surface-variant'
-                }
-              >
-                {image.mediaId}
-              </p>
-
               <div className="flex flex-wrap gap-xs">
                 <button type="button" onClick={onOpenMediaPicker} className={btnPrimaryCls}>
                   <span
