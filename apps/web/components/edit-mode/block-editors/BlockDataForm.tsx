@@ -2,10 +2,9 @@
 
 // apps/web/components/edit-mode/block-editors/BlockDataForm.tsx
 //
-// Editor UI giờ lấy từ packages/block-registry (dùng chung với admin-web).
-// File cũ HeroBlockEditor.tsx / FaqBlockEditor.tsx / RichTextBlockEditor.tsx /
-// JsonBlockEditor.tsx / rich-text.utils.ts trong thư mục này có thể XOÁ sau khi
-// xác nhận build pass — không còn được import ở đâu nữa.
+// Editor UI lấy từ '@cms/block-registry/editors' (subpath RIÊNG, chỉ 2 app frontend
+// dùng — KHÔNG phải '@cms/block-registry' gốc, vì gốc bị admin-api import gián tiếp
+// qua schema-only.ts → registry.ts).
 //
 // apps/web không tự resolve preview url ở đây — MediaPicker của apps/web trả
 // `url` trực tiếp lúc chọn (xem components/edit-mode/MediaPicker.tsx), nên không
@@ -13,7 +12,8 @@
 // không có url), ảnh sẽ không hiện cho tới khi user chọn lại — đây là gap đã có
 // từ trước ở apps/web, không phải regression do đổi sang Editor dùng chung.
 
-import { getBlockDefinition, JsonFallbackEditor } from '@cms/block-registry';
+import { getBlockDefinition } from '@cms/block-registry';
+import { getBlockEditor, JsonFallbackEditor } from '@cms/block-registry/editors';
 
 interface BlockDataFormProps {
   type: string;
@@ -29,26 +29,29 @@ function normalizeBlockType(type: string): string {
 
 export function BlockDataForm({ type, data, onChange, onOpenMediaPicker }: BlockDataFormProps) {
   const normalizedType = normalizeBlockType(type);
+  // Phòng thủ: không phụ thuộc hoàn toàn vào caller truyền sẵn object — nếu data
+  // là undefined/null (block mới tạo, hoặc race condition trước khi defaultData
+  // kịp populate), luôn ép về {} ở đây để Editor không bao giờ nhận value=undefined.
+  const safeData = data ?? {};
 
-  let definition;
+  let isKnownType = false;
   try {
-    definition = getBlockDefinition(normalizedType);
+    getBlockDefinition(normalizedType);
+    isKnownType = true;
   } catch {
-    definition = null;
+    isKnownType = false;
   }
 
-  const Editor = definition?.Editor;
+  const Editor = isKnownType ? getBlockEditor(normalizedType) : undefined;
 
   if (!Editor) {
-    return <JsonFallbackEditor value={data} onChange={onChange} />;
+    return <JsonFallbackEditor value={safeData} onChange={onChange} />;
   }
 
-  return (
-    <Editor
-      value={data}
-      onChange={onChange}
-      onOpenMediaPicker={onOpenMediaPicker}
-      variant="web"
-    />
-  );
+  // Lưu ý: prop `variant="web"` ở bản trước đã bị bỏ — Editor dùng chung
+  // (BlockEditorProps trong packages/block-registry/src/types.ts) không định nghĩa
+  // prop này, nên nó không có tác dụng gì (React chỉ âm thầm bỏ qua prop lạ). Nếu
+  // thực sự cần phân biệt hành vi theo app (admin-web vs apps/web), phải thêm
+  // `variant` vào BlockEditorProps dùng chung trước, rồi mới truyền ở đây.
+  return <Editor value={safeData} onChange={onChange} onOpenMediaPicker={onOpenMediaPicker} />;
 }

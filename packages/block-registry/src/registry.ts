@@ -2,7 +2,6 @@ import { heroBlock } from './blocks/hero';
 import { richTextBlock } from './blocks/rich-text';
 import { faqBlock } from './blocks/faq';
 import type { BlockDefinition } from './types';
-export {JsonFallbackEditor} from './shared/JsonFallbackEditor';
 
 // ─────────────────────────────────────────────────────────
 // Registry
