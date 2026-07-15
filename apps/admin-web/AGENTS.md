@@ -16,6 +16,17 @@
 **Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
 `Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
 
+## 1.1 Editor component — lấy từ subpath riêng
+
+`BlockDataForm.tsx` lấy Editor component qua `getBlockEditor(type)` từ
+`@cms/block-registry/editors` (subpath riêng, KHÔNG phải `@cms/block-registry` gốc).
+`getBlockDefinition(type)` (từ package gốc) chỉ còn dùng để lấy metadata/validate type, không
+còn field `.Editor`. Lý do tách + checklist khi thêm block mới: `packages/block-registry/AGENTS.md`.
+
+⚠️ Nếu thêm token màu/spacing/font mới trong `Editor.tsx` (dùng chung với `apps/web`), phải đồng
+bộ thủ công sang `apps/web/tailwind.config.js` — token thiếu sẽ render mất màu/mất hover một cách
+âm thầm, không báo lỗi. Xem `packages/block-registry/AGENTS.md`.
+
 ## 2. Sidebar (`components/layout/Sidebar.tsx`, state in `useSidebarStore`)
 
 - App title is displayed **above** the menu list (not sharing a row with the first item) — when
