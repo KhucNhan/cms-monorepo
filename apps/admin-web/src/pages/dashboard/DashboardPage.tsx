@@ -1,110 +1,114 @@
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Button } from '@/components/ui/Button';
 import { usePages } from '@/hooks/usePages';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const SUMMARY_CARDS = [
-  {
-    label: 'Total Content Entries',
-    value: '12,482',
-    delta: '+12%',
-    deltaIcon: 'arrow_upward',
-    deltaColor: 'text-primary',
-    bg: 'bg-primary/5 group-hover:bg-primary/10',
-    icon: 'description',
-    iconColor: 'text-primary',
-    iconBg: 'bg-primary/10',
-    sub: 'Updated 5 minutes ago',
-  },
-  {
-    label: 'Active Users',
-    value: '2,105',
-    delta: '+5.4%',
-    deltaIcon: 'arrow_upward',
-    deltaColor: 'text-on-secondary-container',
-    bg: 'bg-secondary/5 group-hover:bg-secondary/10',
-    icon: 'group',
-    iconColor: 'text-on-secondary-container',
-    iconBg: 'bg-secondary-container',
-    sub: 'Across 14 regions globally',
-  },
-  {
-    label: 'Recent Activity',
-    value: '48',
-    delta: 'Today',
-    deltaIcon: 'history',
-    deltaColor: 'text-tertiary',
-    bg: 'bg-tertiary/5 group-hover:bg-tertiary/10',
-    icon: 'bolt',
-    iconColor: 'text-tertiary',
-    iconBg: 'bg-tertiary-container/20',
-    sub: '3 unscheduled maintenance alerts',
-  },
-];
+// const SUMMARY_CARDS = [
+//   {
+//     label: 'Total Content Entries',
+//     value: '12,482',
+//     delta: '+12%',
+//     deltaIcon: 'arrow_upward',
+//     deltaColor: 'text-primary',
+//     bg: 'bg-primary/5 group-hover:bg-primary/10',
+//     icon: 'description',
+//     iconColor: 'text-primary',
+//     iconBg: 'bg-primary/10',
+//     sub: 'Updated 5 minutes ago',
+//   },
+//   {
+//     label: 'Active Users',
+//     value: '2,105',
+//     delta: '+5.4%',
+//     deltaIcon: 'arrow_upward',
+//     deltaColor: 'text-on-secondary-container',
+//     bg: 'bg-secondary/5 group-hover:bg-secondary/10',
+//     icon: 'group',
+//     iconColor: 'text-on-secondary-container',
+//     iconBg: 'bg-secondary-container',
+//     sub: 'Across 14 regions globally',
+//   },
+//   {
+//     label: 'Recent Activity',
+//     value: '48',
+//     delta: 'Today',
+//     deltaIcon: 'history',
+//     deltaColor: 'text-tertiary',
+//     bg: 'bg-tertiary/5 group-hover:bg-tertiary/10',
+//     icon: 'bolt',
+//     iconColor: 'text-tertiary',
+//     iconBg: 'bg-tertiary-container/20',
+//     sub: '3 unscheduled maintenance alerts',
+//   },
+// ];
 
 
-const CHECKLIST = [
-  { done: true,  label: 'Connect your database' },
-  { done: false, label: 'Define first Content Type' },
-  { done: false, label: 'Invite collaborators' },
-];
+// const CHECKLIST = [
+//   { done: true,  label: 'Connect your database' },
+//   { done: false, label: 'Define first Content Type' },
+//   { done: false, label: 'Invite collaborators' },
+// ];
 
 const QUICK_ACTIONS = [
-  {
-    icon: 'add_box',
-    iconBg: 'bg-primary/10',
-    iconColor: 'text-primary',
-    title: 'Create Content Type',
-    sub: 'Define new data structures',
-    href: '/content-type-builder',
-  },
+  // {
+  //   icon: 'add_box',
+  //   iconBg: 'bg-primary/10',
+  //   iconColor: 'text-primary',
+  //   title: 'Create Content Type',
+  //   sub: 'Define new data structures',
+  //   href: '/content-type-builder',
+  // },
   {
     icon: 'post_add',
     iconBg: 'bg-secondary-container',
     iconColor: 'text-on-secondary-container',
     title: 'Add new Entry',
     sub: 'Populate your collections',
-    href: '/content-manager',
+    href: '/content-management?create=true',
+    permission: 'page:create' as const,
   },
-  {
-    icon: 'menu_book',
-    iconBg: 'bg-outline-variant/20',
-    iconColor: 'text-on-surface',
-    title: 'Documentation',
-    sub: 'API guides and tutorials',
-    href: '#',
-  },
+  // {
+  //   icon: 'menu_book',
+  //   iconBg: 'bg-outline-variant/20',
+  //   iconColor: 'text-on-surface',
+  //   title: 'Documentation',
+  //   sub: 'API guides and tutorials',
+  //   href: '#',
+  // },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { can, roleLabel } = usePermissions();
+  const canEditPage = can('page:update');
   const { pages, total, loading: pagesLoading } = usePages({ page: 1, pageSize: 4 });
+  const visibleQuickActions = QUICK_ACTIONS.filter((action) => !action.permission || can(action.permission));
   return (
     <AppLayout
       title="Dashboard"
-      actions={
-        <>
-          <Button variant="secondary" icon="download" size="md">Export Data</Button>
-          <Button variant="primary"   icon="add"      size="md">Create New</Button>
-        </>
-      }
+      // actions={
+      //   <>
+      //     <Button variant="secondary" icon="download" size="md">Export Data</Button>
+      //     <Button variant="primary"   icon="add"      size="md">Create New</Button>
+      //   </>
+      // }
     >
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto space-y-xl">
           {/* Welcome */}
           <div>
-            <h1 className="text-h1 font-h1 text-on-background">Welcome back, Admin!</h1>
-            <p className="text-on-surface-variant text-body-md mt-sm">
+            <h1 className="text-h1 font-h1 text-on-background">Welcome back, {roleLabel}!</h1>
+            {/* <p className="text-on-surface-variant text-body-md mt-sm">
               Here's what's happening with your content today.
-            </p>
+            </p> */}
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
+          {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-lg">
             {SUMMARY_CARDS.map((card, idx) => (
               <div
                 key={card.label}
@@ -115,9 +119,9 @@ export function DashboardPage() {
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.iconBg}`}>
                     <span className={`material-symbols-outlined ${card.iconColor}`}>{card.icon}</span>
                   </div>
-                  <h4 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">
+                  <h4 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest"> */}
                     {/* Inject real total for first card */}
-                    {idx === 0
+                    {/* {idx === 0
                       ? `Total Pages: ${pagesLoading ? '…' : total}`
                       : card.label}
                   </h4>
@@ -132,15 +136,15 @@ export function DashboardPage() {
                 <p className="text-[12px] text-on-surface-variant mt-sm">{card.sub}</p>
               </div>
             ))}
-          </div>
+          </div> */}
 
           {/* Main Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
+          <div className={`grid grid-cols-1 gap-xl ${visibleQuickActions.length > 0 ? 'lg:grid-cols-3' : ''}`}>
             {/* Recent Collections Table */}
-            <div className="lg:col-span-2 bg-surface h-fit rounded-xl border border-outline-variant shadow-sm flex flex-col">
+            <div className={`bg-surface h-fit rounded-xl border border-outline-variant shadow-sm flex flex-col ${visibleQuickActions.length > 0 ? 'lg:col-span-2' : ''}`}>
               <div className="p-lg border-b border-outline-variant flex items-center justify-between">
                 <h3 className="text-h3 font-h3 text-on-surface">Recent Collections</h3>
-                <button onClick={() => navigate('/content-manager')} className="text-primary text-label-md font-label-md hover:underline">
+                <button onClick={() => navigate('/content-management')} className="text-primary text-label-md font-label-md hover:underline">
                   View all
                 </button>
               </div>
@@ -149,10 +153,10 @@ export function DashboardPage() {
                 <table className="w-full text-left">
                   <thead className="bg-surface-container-low">
                     <tr>
-                      {['Page Slug', 'Status', 'Versions', 'Actions'].map((h, i) => (
+                      {['Page Slug', 'Status', 'Versions'].map((h) => (
                         <th
                           key={h}
-                          className={`px-lg py-3 text-label-md font-label-md text-on-surface-variant uppercase tracking-wider ${i === 3 ? 'text-right' : ''}`}
+                          className="px-lg py-3 text-label-md font-label-md text-on-surface-variant uppercase tracking-wider"
                         >
                           {h}
                         </th>
@@ -162,19 +166,25 @@ export function DashboardPage() {
                   <tbody className="divide-y divide-outline-variant">
                     {pagesLoading ? (
                       <tr>
-                        <td colSpan={4} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
+                        <td colSpan={3} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
                           Loading pages…
                         </td>
                       </tr>
                     ) : pages.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
+                        <td colSpan={3} className="px-lg py-6 text-center text-on-surface-variant text-body-md">
                           No pages yet.
                         </td>
                       </tr>
                     ) : (
                       pages.map((page) => (
-                        <tr key={page.id} className="hover:bg-primary/5 transition-colors group">
+                        <tr
+                          key={page.id}
+                          onClick={canEditPage ? () => navigate(`/pages/${page.id}/edit`) : undefined}
+                          className={`transition-colors group ${
+                            canEditPage ? 'hover:bg-primary/5 cursor-pointer' : 'cursor-default'
+                          }`}
+                        >
                           <td className="px-lg py-4">
                             <div className="flex items-center gap-sm">
                               <span className="material-symbols-outlined text-on-surface-variant text-[20px]">article</span>
@@ -195,14 +205,6 @@ export function DashboardPage() {
                           <td className="px-lg py-4 text-body-md text-on-surface-variant">
                             {page._count?.versions ?? 0}
                           </td>
-                          <td className="px-lg py-4 text-right">
-                            <button
-                              onClick={() => navigate(`/pages/${page.id}/edit`)}
-                              className="p-1 hover:bg-surface-container-high rounded transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              <span className="material-symbols-outlined text-primary text-[20px]">edit</span>
-                            </button>
-                          </td>
                         </tr>
                       ))
                     )}
@@ -218,6 +220,7 @@ export function DashboardPage() {
             </div>
 
             {/* Right column */}
+            {visibleQuickActions.length > 0 && (
             <div className="space-y-lg">
               {/* Getting Started card */}
               {/* <div className="bg-primary-container text-on-primary-container p-xl rounded-xl relative overflow-hidden">
@@ -249,7 +252,7 @@ export function DashboardPage() {
               <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg">
                 <h3 className="text-h3 font-h3 text-on-surface mb-md">Quick Actions</h3>
                 <div className="space-y-sm">
-                  {QUICK_ACTIONS.map((action) => (
+                  {visibleQuickActions.map((action) => (
                     <a
                       key={action.title}
                       href={action.href}
@@ -269,6 +272,7 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

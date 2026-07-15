@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Res,
   Req,
@@ -13,22 +14,44 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import '@fastify/cookie';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { loginSchema, type LoginDto } from './dto/auth.dto';
 import type { JwtPayload } from '@cms/shared-types';
 
 const REFRESH_COOKIE = 'cms_refresh_token';
+const ACCESS_COOKIE = 'access_token';
 
-const cookieOptions = {
+const refreshCookieOptions = {
   httpOnly: true,
   secure: process.env['NODE_ENV'] === 'production',
   sameSite: 'lax' as const,
   path: '/api/v1/auth/refresh',
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
+
+/** Returns cookie options for access_token from env vars — different in dev vs prod */
+function accessCookieOptions(): {
+  domain?: string;
+  path: string;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'none';
+  maxAge: number;
+} {
+  return {
+    domain: process.env['COOKIE_DOMAIN'] || undefined,
+    path: '/',
+    httpOnly: true,
+    secure: process.env['COOKIE_SECURE'] === 'true',
+    sameSite: (process.env['COOKIE_SAMESITE'] ?? 'lax') as 'lax' | 'none',
+    maxAge: 15 * 60 * 1000, // 15 min — matches JWT access token expiry
+  };
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -57,7 +80,9 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const { accessToken, refreshToken } = await this.authService.login(dto);
-    reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions);
+    reply.setCookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    // Set access_token cookie so apps/web on the same root domain can send it automatically
+    reply.setCookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
     return { accessToken };
   }
 
@@ -93,15 +118,68 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     await this.authService.logout(req.user.sub);
-    reply.clearCookie(REFRESH_COOKIE, { path: cookieOptions.path });
+    reply.clearCookie(REFRESH_COOKIE, { path: refreshCookieOptions.path });
+    reply.clearCookie(ACCESS_COOKIE, { path: '/', domain: process.env['COOKIE_DOMAIN'] || undefined });
     return { message: 'Logged out successfully' };
   }
 
-  @Post('me')
-  @HttpCode(HttpStatus.OK)
+  @Get('me')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get current authenticated user info' })
+  @ApiOperation({ summary: 'Get current authenticated user info (works with cookie or Bearer token)' })
   me(@Req() req: FastifyRequest & { user: JwtPayload }) {
     return req.user;
+  }
+
+  // ── Google OAuth ─────────────────────────────────────────────────────────────
+
+  /**
+   * Step 1 — Redirect to Google consent screen.
+   * Manually redirects to bypass Passport's Express-style response method calls
+   * which are incompatible with Fastify.
+   */
+  @Get('google')
+  @ApiOperation({ summary: 'Initiate Google OAuth flow (redirects to Google)' })
+  async googleLogin(@Res() reply: FastifyReply) {
+    const clientId = process.env['GOOGLE_CLIENT_ID'];
+    const redirectUri = process.env['GOOGLE_CALLBACK_URL'];
+    
+    if (!clientId || !redirectUri) {
+      throw new Error('Google OAuth configuration is missing (GOOGLE_CLIENT_ID or GOOGLE_CALLBACK_URL)');
+    }
+
+    const scope = 'email profile';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent(scope)}`;
+
+    return reply.code(302).redirect(authUrl);
+  }
+
+  /**
+   * Step 2 — Google redirects back here after user consents.
+   * Uses GoogleAuthGuard (not plain AuthGuard) so a rejected login (no matching account)
+   * results in a redirect to /login?error=no_account rather than a raw 401 JSON.
+   */
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Google OAuth callback — handles token exchange and redirect' })
+  async googleCallback(
+    @Req()  req:   FastifyRequest & { user?: any },
+    @Res()  reply: FastifyReply,
+  ) {
+    const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:5173';
+
+    if (!req.user) {
+      // Strategy returned done(null, false) — no matching account
+      return reply.code(302).redirect(`${frontendUrl}/login?error=no_account`);
+    }
+
+    const { accessToken, refreshToken } = await this.authService.loginWithGoogle(req.user);
+    reply.setCookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
+    // Also set shared access_token cookie so apps/web picks it up
+    reply.setCookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
+    return reply.code(302).redirect(`${frontendUrl}/auth/callback#token=${accessToken}`);
   }
 }

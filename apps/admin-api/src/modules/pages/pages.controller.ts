@@ -39,12 +39,14 @@ export class PagesController {
   ) {}
 
   @Get()
+  @RequirePermissions('page:read')
   @ApiOperation({ summary: 'List all pages (paginated)' })
-  findAll(@Query(new ZodValidationPipe(listPagesSchema)) query: { page: number; pageSize: number }) {
+  findAll(@Query(new ZodValidationPipe(listPagesSchema)) query: { page: number; pageSize: number; search?: string }) {
     return this.pagesService.findAll(query);
   }
 
   @Get(':idOrSlug')
+  @RequirePermissions('page:read')
   @ApiOperation({ summary: 'Get page by id or slug' })
   findOne(@Param('idOrSlug') idOrSlug: string) {
     return this.pagesService.findByIdOrSlug(idOrSlug);
@@ -62,7 +64,7 @@ export class PagesController {
 
   @Patch(':id')
   @RequirePermissions('page:update')
-  @ApiOperation({ summary: 'Update page slug' })
+  @ApiOperation({ summary: 'Update page title and/or slug' })
   update(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updatePageSchema)) dto: UpdatePageDto,
@@ -98,5 +100,15 @@ export class PagesController {
     @Req() req: FastifyRequest & { user: JwtPayload },
   ) {
     return this.pagesService.createDraftVersion(pageId, versionId, req.user.sub);
+  }
+
+  @Post(':id/draft')
+  @RequirePermissions('page:update')
+  @ApiOperation({ summary: 'Get existing DRAFT or create one from published version (Live Edit Mode entry)' })
+  getOrCreateDraft(
+    @Param('id') pageId: string,
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.pageVersionsService.getOrCreateDraft(pageId, req.user.sub);
   }
 }

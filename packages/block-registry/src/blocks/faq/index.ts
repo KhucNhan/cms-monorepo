@@ -6,6 +6,7 @@ export const faqBlock: BlockDefinition<typeof faqSchema> = {
   label: 'FAQ',
   icon: 'HelpCircle',
   schema: faqSchema,
+  thumbnail: '/block-thumbnails/faq.png',
   defaultData: {
     heading: 'Frequently Asked Questions',
     items: [

@@ -63,8 +63,13 @@ model RolePermission {
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
-  password     String  // bcrypt hash — tên trường khớp DBML
+  password     String  // bcrypt hash — mọi user đều có password; không có Google-only account
   roleId       String
+
+  // Google OAuth — set lần đầu khi user đăng nhập Google, null với user chưa link
+  googleId    String? @unique  // Google "sub" claim
+  displayName String?          // full name từ Google profile (display only)
+  avatarUrl   String?          // profile picture từ Google (display only)
 
   role         Role          @relation(fields: [roleId], references: [id])
   pageVersions PageVersion[]
@@ -82,6 +87,7 @@ model User {
 model Page {
   id        String   @id @default(uuid())
   slug      String   @unique
+  title     String   @default("")
   createdAt DateTime @default(now())
 
   // Con trỏ sang version đang live (null = chưa publish lần nào)
@@ -138,8 +144,17 @@ model Media {
   url      String
   key      String  @unique   // object key trên S3/R2/local
   mimeType String
+
+  detailKey String?
+  detailUrl String?
+  thumbKey  String?
+  thumbUrl  String?
+
   width    Int?
   height   Int?
 
+  altText  String?  // alt text cho SEO / accessibility
+  fileSize Int?     // kích thước file gốc user upload (bytes) — null với record cũ trước tính năng này
+  
   @@map("media")
 }

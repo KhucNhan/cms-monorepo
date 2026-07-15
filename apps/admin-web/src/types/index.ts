@@ -94,6 +94,7 @@ export interface PageVersion {
 export interface Page {
   id: string;
   slug: string;
+  title: string;
   createdAt: string;
   publishedVersionId: string | null;
   publishedVersion: {
@@ -122,6 +123,7 @@ export interface PageDetail extends Omit<Page, '_count'> {
 export interface PageFilters {
   page?: number;
   pageSize?: number;
+  search?: string;
 }
 
 // ─── Media ───────────────────────────────────────────────────────────────────
@@ -133,12 +135,21 @@ export interface MediaItem {
   mimeType: string;
   width: number | null;
   height: number | null;
+  // ── Mới: variant đã tối ưu (webp, ≤300KB) — null nếu record cũ chưa có hoặc là SVG ──
+  detailKey?: string | null;
+  detailUrl?: string | null;
+  thumbKey?: string | null;
+  thumbUrl?: string | null;
+  // ── Metadata bổ sung ──
+  altText?: string | null;   // alt text cho SEO / accessibility
+  fileSize?: number | null;  // kích thước file gốc (bytes) — null với record cũ
 }
 
 export interface MediaFilters {
   page?: number;
   pageSize?: number;
   mimeType?: string;
+  search?: string;
 }
 
 // ─── Legacy Content types (giữ để không break Badge, content.api, useContentEntries) ──

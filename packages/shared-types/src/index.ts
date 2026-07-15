@@ -38,6 +38,7 @@ export enum ErrorCode {
   CONFLICT            = 'CONFLICT',
   UNKNOWN_BLOCK_TYPE  = 'UNKNOWN_BLOCK_TYPE',
   INTERNAL_ERROR      = 'INTERNAL_ERROR',
+  MEDIA_IN_USE        = 'MEDIA_IN_USE',
 }
 
 // ─────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ export enum ErrorCode {
 // ─────────────────────────────────────────────────────────
 
 /** Các resource hợp lệ trong hệ thống */
-export type PermissionResource = 'page' | 'media' | 'user';
+export type PermissionResource = 'page' | 'media' | 'user' | 'role';
 
 /** Các action hợp lệ */
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete' | 'publish';
@@ -79,6 +80,7 @@ export type VersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export interface Page {
   id: string;
   slug: string;
+  title: string;
   publishedVersionId: string | null;
   createdAt: string;
 }
@@ -124,6 +126,11 @@ export interface Media {
   mimeType: string;
   width: number | null;
   height: number | null;
+  // ── Mới: variant đã tối ưu (webp, ≤300KB) — null nếu record cũ chưa có hoặc là SVG ──
+  detailKey: string | null;
+  detailUrl: string | null;
+  thumbKey: string | null;
+  thumbUrl: string | null;
 }
 
 // ─────────────────────────────────────────────────────────

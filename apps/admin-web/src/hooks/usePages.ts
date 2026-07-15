@@ -22,7 +22,6 @@ export function usePages(filters: PageFilters = {}) {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const data = await pagesApi.getAll(filters);
-      console.log('[usePages] response:', data); // ← thêm dòng này
       setState({ data, loading: false, error: null });
     } catch (err) {
       console.error('[usePages] error:', err); // ← và dòng này

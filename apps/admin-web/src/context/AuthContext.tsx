@@ -14,6 +14,8 @@ interface AuthContextValue extends AuthState {
   hydrating: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
+  loginWithGoogle: () => void;
+  loginWithToken: (token: string) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -78,9 +80,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [navigate]);
 
+  const loginWithGoogle = useCallback(() => {
+    const apiBase = import.meta.env.VITE_API_URL ?? '/api/v1';
+    window.location.href = `${apiBase}/auth/google`;
+  }, []);
+
+  const loginWithToken = useCallback(async (token: string) => {
+    tokenStorage.set(token);
+    try {
+      const user = await authApi.me();
+      setState({ user, loading: false, error: null });
+      navigate('/dashboard');
+    } catch (err) {
+      tokenStorage.clear();
+      setState({ user: null, loading: false, error: null });
+      throw err;
+    }
+  }, [navigate]);
+
+
   return (
     <AuthContext.Provider
-      value={{ ...state, hydrating, login, logout, isAuthenticated: !!state.user }}
+      value={{ ...state, hydrating, login, logout, loginWithGoogle, loginWithToken, isAuthenticated: !!state.user }}
     >
       {children}
     </AuthContext.Provider>

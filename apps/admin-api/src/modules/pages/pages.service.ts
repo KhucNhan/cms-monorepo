@@ -9,7 +9,8 @@ export const createPageSchema = z.object({
   slug: z
     .string().min(1).max(200)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase kebab-case'),
-  title: z.string().max(100).optional(),
+  // Page.title: tên hiển thị của trang, tách biệt hoàn toàn với seoMeta.title (thẻ SEO <title>).
+  title: z.string().max(100).optional().default(''),
   seoMeta: z.object({
     title:       z.string().max(60).optional(),
     description: z.string().max(160).optional(),
@@ -21,11 +22,13 @@ export const createPageSchema = z.object({
 export const updatePageSchema = z.object({
   slug: z.string().min(1).max(200)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+  title: z.string().max(100).optional(),
 });
 
 export const listPagesSchema = z.object({
   page:     z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search:   z.string().optional(),
 });
 
 export type CreatePageDto = z.infer<typeof createPageSchema>;
@@ -35,21 +38,26 @@ export type UpdatePageDto = z.infer<typeof updatePageSchema>;
 export class PagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(params: { page: number; pageSize: number }) {
-    const { page, pageSize } = params;
+  async findAll(params: { page: number; pageSize: number; search?: string }) {
+    const { page, pageSize, search } = params;
     const skip = (page - 1) * pageSize;
+    const trimmedSearch = search?.trim();
+    const where = trimmedSearch
+      ? { slug: { contains: trimmedSearch, mode: 'insensitive' as const } }
+      : {};
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.page.findMany({
+        where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
-          publishedVersion: { select: { id: true, status: true, updatedAt: true } },
+          publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
           _count: { select: { versions: true } },
         },
       }),
-      this.prisma.page.count(),
+      this.prisma.page.count({ where }),
     ]);
 
     return {
@@ -85,24 +93,20 @@ export class PagesService {
       throw new ConflictException({ code: ErrorCode.CONFLICT, message: `Slug already exists: ${dto.slug}` });
     }
 
-    const mergedSeoMeta = {
-      ...(dto.seoMeta ?? {}),
-      ...(dto.title ? { title: dto.title } : {}),
-    };
-
     return this.prisma.page.create({
       data: {
         slug: dto.slug,
+        title: dto.title ?? '',
         versions: {
           create: {
             status: 'DRAFT',
-            seoMeta: mergedSeoMeta,
+            seoMeta: dto.seoMeta ?? {},
             createdBy,
           },
         },
       },
       include: {
-        publishedVersion: { select: { id: true, status: true, updatedAt: true } },
+        publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
         _count: { select: { versions: true } },
         versions: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
@@ -120,7 +124,16 @@ export class PagesService {
       }
     }
 
-    return this.prisma.page.update({ where: { id }, data: { slug: dto.slug } });
+    // title là thuộc tính của Page (không versioned), có thể update trực tiếp bất kể
+    // trạng thái DRAFT/PUBLISHED của version hiện tại — khác với slug (cũng ở Page nhưng
+    // theo quy ước hiện tại lưu trực tiếp) và seoMeta (thuộc PageVersion, phải qua draft).
+    return this.prisma.page.update({
+      where: { id },
+      data: {
+        ...(dto.slug !== undefined ? { slug: dto.slug } : {}),
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+      },
+    });
   }
 
   async delete(id: string) {
@@ -148,7 +161,7 @@ export class PagesService {
         createdBy,
         blocks: {
           createMany: {
-            data: source.blocks.map((b) => ({
+            data: source.blocks.map((b: (typeof source.blocks)[number]) => ({
               type: b.type,
               orderIndex: b.orderIndex,
               data: b.data as object,

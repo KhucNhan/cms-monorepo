@@ -16,6 +16,7 @@ export interface PagesListResponse {
 export interface PagesListParams {
   page?: number;
   pageSize?: number;
+  search?: string;
 }
 
 // ─── Pages API ────────────────────────────────────────────────────────────────
@@ -29,6 +30,7 @@ export const pagesApi = {
     const qs = new URLSearchParams();
     if (params.page)     qs.set('page',     String(params.page));
     if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    if (params.search)   qs.set('search',   params.search);
     const query = qs.toString() ? `?${qs}` : '';
     return apiClient.get<PagesListResponse>(`/pages${query}`);
   },
@@ -49,9 +51,9 @@ export const pagesApi = {
 
   /**
    * PATCH /api/v1/pages/:id
-   * Cập nhật slug của page
+   * Cập nhật title và/hoặc slug của page
    */
-  update: (id: string, data: { slug?: string }) =>
+  update: (id: string, data: { slug?: string; title?: string }) =>
     apiClient.patch<Page>(`/pages/${id}`, data),
 
   /**

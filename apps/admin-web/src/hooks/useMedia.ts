@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { mediaApi, type MediaListResponse } from '@/api/media.api';
+import { mediaApi, type MediaListResponse, type MediaUsageInfo } from '@/api/media.api';
 import { ApiClientError } from '@/api/client';
 import type { MediaFilters } from '@/types';
 
@@ -48,20 +48,44 @@ export function useMedia(filters: MediaFilters = {}) {
     });
   }, []);
 
+  /** Check trước khi xóa: media đang bị block nào tham chiếu (mọi status pageVersion). */
+  const checkMediaUsage = useCallback((id: string): Promise<MediaUsageInfo[]> => {
+    return mediaApi.getUsages(id);
+  }, []);
+
   const uploadMedia = useCallback(async (file: File) => {
     const created = await mediaApi.upload(file);
+    return created;
+  }, []);
+
+  const renameMedia = useCallback(async (id: string, name: string) => {
+    const updated = await mediaApi.rename(id, name);
     setState((s) => {
-      if (!s.data) return { ...s, data: { data: [created], meta: { total: 1, page: 1, pageSize: 24, hasNextPage: false } } };
+      if (!s.data) return s;
       return {
         ...s,
         data: {
           ...s.data,
-          data: [created, ...s.data.data],
-          meta: { ...s.data.meta, total: s.data.meta.total + 1 },
+          data: s.data.data.map((m) => (m.id === id ? updated : m)),
         },
       };
     });
-    return created;
+    return updated;
+  }, []);
+
+  const updateMedia = useCallback(async (id: string, body: { name?: string; altText?: string }) => {
+    const updated = await mediaApi.update(id, body);
+    setState((s) => {
+      if (!s.data) return s;
+      return {
+        ...s,
+        data: {
+          ...s.data,
+          data: s.data.data.map((m) => (m.id === id ? updated : m)),
+        },
+      };
+    });
+    return updated;
   }, []);
 
   return {
@@ -74,6 +98,9 @@ export function useMedia(filters: MediaFilters = {}) {
     error: state.error,
     refetch: fetch,
     deleteMedia,
+    checkMediaUsage,
     uploadMedia,
+    renameMedia,
+    updateMedia,
   };
 }

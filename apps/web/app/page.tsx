@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { BlockRenderer } from '@/components/blocks';
+import { NavbarSwitcher } from '@/components/NavbarSwitcher';
 import { getPageBySlug } from '@/lib/pages';
 
 export default async function HomePage() {
@@ -10,6 +11,7 @@ export default async function HomePage() {
 
   return (
     <main>
+      <NavbarSwitcher pageId={page.id} slug={page.slug} initialBlocks={sortedBlocks} />
       {sortedBlocks.map((block) => (
         <BlockRenderer key={block.id} block={block} />
       ))}

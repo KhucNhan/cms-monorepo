@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}', '../../packages/block-registry/src/**/*.{ts,tsx,js,jsx}'],
   darkMode: 'class',
   theme: {
     extend: {
@@ -18,11 +18,11 @@ export default {
         'secondary':                  '#5d5c72',
         'secondary-fixed':            '#e2e0fa',
         'secondary-fixed-dim':        '#c6c4dd',
-        'secondary-container':        '#dfddf7',
+        'secondary-container':        '#FFFFFF',
         'on-secondary':               '#ffffff',
         'on-secondary-fixed':         '#1a1a2c',
         'on-secondary-fixed-variant': '#45455a',
-        'on-secondary-container':     '#616177',
+        'on-secondary-container':     '#000000',
 
         'tertiary':                   '#8b2c00',
         'tertiary-fixed':             '#ffdbcf',

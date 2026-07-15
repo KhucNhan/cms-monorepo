@@ -16,9 +16,9 @@ export const authApi = {
     apiClient.post<void>('/auth/logout', {}),
 
   /**
-   * POST /api/v1/auth/me — trả về JwtPayload của user đang đăng nhập
-   * BE dùng @Post('me') không phải @Get
+   * GET /api/v1/auth/me — trả về JwtPayload của user đang đăng nhập
+   * (auth.controller.ts dùng @Get('me'), không phải @Post)
    */
   me: () =>
-    apiClient.post<AuthUser>('/auth/me', {}),
+    apiClient.get<AuthUser>('/auth/me'),
 };

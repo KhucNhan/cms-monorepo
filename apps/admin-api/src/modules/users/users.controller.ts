@@ -35,8 +35,10 @@ export class UsersController {
   @Get()
   @RequirePermissions('user:read')
   @ApiOperation({ summary: 'List all users' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(
+    @Req() req: FastifyRequest & { user: JwtPayload },
+  ) {
+    return this.usersService.findAll(req.user.sub);
   }
 
   @Get('roles/list')

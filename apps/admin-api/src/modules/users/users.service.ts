@@ -30,10 +30,13 @@ export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 
 // Luôn exclude password + refreshTokenHash khỏi response
 const USER_SELECT = {
-  id:       true,
-  email:    true,
-  roleId:   true,
-  password: false,
+  id:          true,
+  email:       true,
+  roleId:      true,
+  googleId:    true,
+  displayName: true,
+  avatarUrl:   true,
+  password:         false,
   refreshTokenHash: false,
   role: {
     select: {
@@ -52,8 +55,35 @@ const USER_SELECT = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(requesterId: string) {
+    const requester = await this.prisma.user.findUnique({
+      where: { id: requesterId },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!requester) {
+      throw new NotFoundException();
+    }
+
+    // ADMIN thấy tất cả
+    if (requester.role.name.toLocaleLowerCase() === 'admin') {
+      return this.prisma.user.findMany({
+        select: USER_SELECT,
+        orderBy: { email: 'asc' },
+      });
+    }
+
+    // EDITOR không thấy ADMIN
     return this.prisma.user.findMany({
+      where: {
+        role: {
+          name: {
+            not: 'admin',
+          },
+        },
+      },
       select: USER_SELECT,
       orderBy: { email: 'asc' },
     });
@@ -121,5 +151,48 @@ export class UsersService {
     await this.findOne(id);
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  /**
+   * Find an existing user by Google profile — never creates a new user.
+   *
+   * Flow:
+   *   1. Fast path: look up by googleId (already linked)
+   *   2. Slow path: look up by normalized email (first-time Google login for an existing account)
+   *      → if found, update the record with googleId / displayName / avatarUrl (link)
+   *   3. If not found by either → return null (caller/strategy must reject the login)
+   */
+  async findUserByGoogleProfile(profile: {
+    googleId:    string;
+    email:       string;
+    displayName: string | null;
+    avatarUrl:   string | null;
+  }) {
+    // Normalize email: Google profile emails can differ in casing
+    const normalizedEmail = profile.email.toLowerCase().trim();
+
+    // 1. Fast path — already linked
+    const byGoogleId = await this.prisma.user.findUnique({
+      where: { googleId: profile.googleId },
+      select: USER_SELECT,
+    });
+    if (byGoogleId) return byGoogleId;
+
+    // 2. Slow path — first Google login, find by email and link
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (!byEmail) return null;  // no matching account — reject
+
+    // Link Google account to existing user
+    return this.prisma.user.update({
+      where: { id: byEmail.id },
+      data: {
+        googleId:    profile.googleId,
+        displayName: profile.displayName,
+        avatarUrl:   profile.avatarUrl,
+      },
+      select: USER_SELECT,
+    });
   }
 }

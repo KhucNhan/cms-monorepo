@@ -6,7 +6,7 @@ interface Props {
   data: RichTextBlockData;
 }
 
-function renderNode(node: ProseMirrorNode, key: string | number): ReactNode {
+function renderNode(node: ProseMirrorNode, key: string | number): any {
   const children = node.content?.map((child, i) => renderNode(child, i));
 
   switch (node.type) {

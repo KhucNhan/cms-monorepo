@@ -1,82 +1,99 @@
-import { type ButtonHTMLAttributes, type ReactNode } from 'react';
+// src/components/ui/Button.tsx
+
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+
 import { cn } from '@/config/cn';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size    = 'sm' | 'md' | 'lg';
+const buttonVariants = cva(
+  [
+    'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+    'disabled:pointer-events-none disabled:opacity-50',
+    'select-none whitespace-nowrap',
+  ],
+  {
+    variants: {
+      variant: {
+        primary:
+          'bg-primary text-on-primary hover:opacity-90',
+        secondary:
+          'bg-secondary-container text-on-secondary-container hover:bg-gray-100',
+        ghost:
+          'bg-transparent text-on-surface hover:bg-surface-container-high',
+        danger:
+          'bg-error text-on-error hover:opacity-90',
+      },
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: Size;
+      size: {
+        sm: 'h-8 px-3 text-sm',
+        md: 'h-10 px-4 text-sm',
+      },
+    },
+
+    defaultVariants: {
+      variant: 'primary',
+      size: 'md',
+    },
+  },
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   icon?: string;
   iconPosition?: 'left' | 'right';
   loading?: boolean;
-  children?: ReactNode;
 }
 
-const variantClasses: Record<Variant, string> = {
-  primary:   'bg-primary text-on-primary hover:opacity-90 shadow-md active:scale-[0.98]',
-  secondary: 'bg-surface border border-outline-variant text-primary hover:bg-surface-container',
-  ghost:     'text-on-surface-variant hover:bg-surface-container-high',
-  danger:    'bg-error text-on-error hover:opacity-90',
-};
+export const Button = React.forwardRef<
+  HTMLButtonElement,
+  ButtonProps
+>(
+  (
+    {
+      className,
+      variant,
+      size,
+      icon,
+      iconPosition = 'left',
+      loading = false,
+      disabled,
+      children,
+      type = 'button',
+      ...props
+    },
+    ref,
+  ) => {
+    const isDisabled = disabled || loading;
 
-const sizeClasses: Record<Size, string> = {
-  sm: 'px-sm py-1 text-label-md gap-xs',
-  md: 'px-md py-2 text-label-md gap-sm',
-  lg: 'px-lg py-sm text-body-md gap-sm',
-};
+    const iconNode = icon ? (
+      <span className="material-symbols-outlined text-[18px]">
+        {loading ? 'progress_activity' : icon}
+      </span>
+    ) : null;
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  icon,
-  iconPosition = 'left',
-  loading = false,
-  children,
-  className,
-  disabled,
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      className={cn(
-        'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 select-none',
-        variantClasses[variant],
-        sizeClasses[size],
-        (disabled || loading) && 'opacity-50 cursor-not-allowed pointer-events-none',
-        className,
-      )}
-      disabled={disabled || loading}
-      {...props}
-    >
-      {loading ? (
-        <>
-          <svg
-            className="animate-spin h-4 w-4 text-current"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          {children && <span>{children}</span>}
-        </>
-      ) : (
-        <>
-          {icon && iconPosition === 'left' && (
-            <span className="material-symbols-outlined text-[18px]">{icon}</span>
-          )}
-          {children}
-          {icon && iconPosition === 'right' && (
-            <span className="material-symbols-outlined text-[18px]">{icon}</span>
-          )}
-        </>
-      )}
-    </button>
-  );
-}
+    return (
+      <button
+        ref={ref}
+        type={type}
+        disabled={isDisabled}
+        className={cn(
+          buttonVariants({ variant, size }),
+          className,
+        )}
+        {...props}
+      >
+        {iconPosition === 'left' && iconNode}
+
+        {children}
+
+        {iconPosition === 'right' && iconNode}
+      </button>
+    );
+  },
+);
+
+Button.displayName = 'Button';
+
+export { buttonVariants };

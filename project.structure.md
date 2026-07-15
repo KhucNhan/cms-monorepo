@@ -1,5 +1,8 @@
 cms-monorepo
 ├── README.md
+├── AGENTS.md
+├── ARCHITECTURE-DESIGN.md
+├── DEPLOYMENT.md
 ├── admin.api.structure.md
 ├── admin.web.structure.md
 ├── apps

@@ -36,7 +36,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code = httpStatusToCode(status);
       }
     } else {
-      this.logger.error('Unhandled exception', exception);
+      const err = exception instanceof Error ? exception : new Error(String(exception));
+      this.logger.error(`Unhandled exception: ${err.message}`, err.stack);
     }
 
     const body: ApiError = {
