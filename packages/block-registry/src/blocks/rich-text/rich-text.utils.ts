@@ -11,15 +11,39 @@ type ProseMirrorNode = {
   content?: ProseMirrorNode[];
 };
 
-function walkNodes(nodes: ProseMirrorNode[]): string {
+/**
+ * Đi bộ các node INLINE (text / hardBreak) nằm bên trong CÙNG MỘT paragraph —
+ * nối bằng '' vì chúng thuộc cùng 1 dòng (hardBreak tự chèn '\n' của riêng nó
+ * khi xuống dòng mềm trong 1 paragraph).
+ */
+function walkInline(nodes: ProseMirrorNode[]): string {
   return nodes
     .map((node) => {
       if (node.type === 'text') return node.text ?? '';
       if (node.type === 'hardBreak') return '\n';
-      if (node.content?.length) return walkNodes(node.content);
+      if (node.content?.length) return walkInline(node.content);
       return '';
     })
     .join('');
+}
+
+/**
+ * Đi bộ các node BLOCK (paragraph, ...) ở cấp doc.content — PHẢI nối bằng '\n'
+ * giữa các paragraph, khác với walkInline. Đây chính là chỗ bug cũ: dùng chung
+ * 1 hàm walkNodes join('') cho cả 2 cấp khiến 2 paragraph liên tiếp bị dính
+ * làm một, làm mất newline người dùng vừa gõ ngay khi textarea re-render.
+ */
+function walkBlocks(nodes: ProseMirrorNode[]): string {
+  return nodes
+    .map((node) => {
+      const line = node.content?.length ? walkInline(node.content) : '';
+      // plainTextToContent() dùng ' ' làm placeholder cho dòng trống (để paragraph
+      // không rỗng, tránh vài schema ProseMirror/TipTap từ chối empty paragraph).
+      // Khi hiển thị lại, coi placeholder này là dòng trống thật để textarea trông
+      // tự nhiên như người dùng đã gõ, thay vì lộ ra 1 khoảng trắng lạ mỗi dòng trống.
+      return line === ' ' ? '' : line;
+    })
+    .join('\n');
 }
 
 /** Extract plain text from ProseMirror JSON — never from htmlFallback */
@@ -42,7 +66,7 @@ export function extractPlainTextFromContent(raw: unknown): string {
   }
 
   if (Array.isArray(raw)) {
-    return walkNodes(raw as ProseMirrorNode[]);
+    return walkBlocks(raw as ProseMirrorNode[]);
   }
 
   if (typeof raw === 'object') {
@@ -53,11 +77,11 @@ export function extractPlainTextFromContent(raw: unknown): string {
     }
 
     if (doc.type === 'doc' && doc.content?.length) {
-      return walkNodes(doc.content);
+      return walkBlocks(doc.content);
     }
 
     if (doc.content?.length) {
-      return walkNodes(doc.content);
+      return walkBlocks(doc.content);
     }
   }
 

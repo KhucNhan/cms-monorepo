@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { AuthProvider } from '@/components/edit-mode/AuthProvider';
-import { NavbarSwitcher } from '@/components/NavbarSwitcher';
 import './globals.css';
 import { ViewportProvider } from '@/components/edit-mode/ViewportContext';
 
@@ -28,17 +27,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
            chỉ check ở Client Component, KHÔNG đọc cookie ở đây (Server Component)
            để giữ app/[slug]/page.tsx static-renderable (root AGENTS.md 1.6 / apps/web AGENTS.md). */}
         <AuthProvider>
-          {/* ViewportProvider bọc CẢ NavbarSwitcher (AdminNavbar) lẫn {children} (nơi
-             EditModeLayout/PagePreview mount) — 2 nhánh này là anh em trong cây component,
-             không có quan hệ cha-con, nên cần 1 context chung ở tầng cao hơn thay vì
-             prop-drilling. Xem components/edit-mode/ViewportContext.tsx. */}
+          {/* ViewportProvider bọc CẢ NavbarSwitcher (AdminNavbar, mount trong page.tsx)
+             lẫn {children} (nơi EditModeLayout/PagePreview mount) — 2 nhánh này là anh em
+             trong cây component, không có quan hệ cha-con, nên cần 1 context chung ở tầng
+             cao hơn thay vì prop-drilling. Xem components/edit-mode/ViewportContext.tsx. */}
           <ViewportProvider>
-            {/* Chưa có pageId/slug/initialBlocks ở tầng layout (layout bao mọi route,
-               không có dữ liệu của từng page) — nên AdminNavbar sẽ hiện nhưng KHÔNG hiển thị
-               slug và nút "Edit" sẽ không mở được EditModeLayout (thiếu pageId).
-               Muốn Edit Mode hoạt động đầy đủ trên từng trang, xem ghi chú bên dưới để
-               chuyển NavbarSwitcher xuống app/[slug]/page.tsx thay vì layout.tsx. */}
-            <NavbarSwitcher />
+            {/* KHÔNG render <NavbarSwitcher /> ở đây — layout.tsx bao mọi route nên không
+               có pageId/slug/initialBlocks của từng trang. NavbarSwitcher CHỈ được mount
+               ở app/[slug]/page.tsx (có đủ props thật). Từng có bug: cả 2 nơi cùng render
+               NavbarSwitcher → 2 AdminNavbar chồng lên nhau ở cùng vị trí mặc định, bản ở
+               đây thiếu slug vì không có props → khi kéo thanh admin, chỉ 1 trong 2 DOM
+               node di chuyển, lộ ra bản còn lại như một "bản clone không có tên slug".
+               Nếu cần AdminNavbar xuất hiện trên các route không có page.tsx riêng (404,
+               error page...), đó là một nhu cầu khác — xử lý bằng cách truyền props hợp lệ
+               (hoặc ẩn hẳn), không phải render trùng NavbarSwitcher như cũ. */}
             <Navbar />
             {children}
           </ViewportProvider>
