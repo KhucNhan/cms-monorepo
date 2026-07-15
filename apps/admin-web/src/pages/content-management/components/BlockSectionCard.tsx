@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Block } from '@/types';
-import { BlockDataForm } from './BlockDataForm';
+import { BlockDataForm } from './block-editors/BlockDataForm';
 import { Can } from '@/components/Can';
 
 interface BlockSectionCardProps {

@@ -1,5 +1,6 @@
 import { richTextSchema, type RichTextData } from './schema';
 import type { BlockDefinition } from '../../types';
+import { RichTextEditor } from './Editor';
 
 export const richTextBlock: BlockDefinition<typeof richTextSchema> = {
   type: 'rich-text',
@@ -20,6 +21,7 @@ export const richTextBlock: BlockDefinition<typeof richTextSchema> = {
     htmlFallback: '<p>Start writing here...</p>',
     textAlign: 'left',
   } satisfies RichTextData,
+  Editor: RichTextEditor,
 };
 
 export { richTextSchema, type RichTextData };

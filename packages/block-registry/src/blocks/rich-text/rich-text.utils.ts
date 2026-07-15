@@ -1,4 +1,9 @@
-import type { RichTextBlockData } from '@/types';
+/**
+ * Shared rich-text utilities for ProseMirror / TipTap JSON ↔ plain text conversion.
+ * Used by both admin-web and apps/web via block-registry.
+ * NO React imports here — pure TypeScript.
+ */
+import type { RichTextData } from './schema';
 
 type ProseMirrorNode = {
   type?: string;
@@ -86,12 +91,13 @@ export function contentToHtmlFallback(content: Record<string, unknown>): string 
   if (!text.trim()) return '<p></p>';
   return text
     .split('\n')
-    .map((line) =>
-      `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
+    .map(
+      (line) =>
+        `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
     )
     .join('');
 }
 
-export function getRichTextDisplayText(data: RichTextBlockData): string {
+export function getRichTextDisplayText(data: RichTextData): string {
   return extractPlainTextFromContent(data.content);
 }

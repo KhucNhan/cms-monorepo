@@ -36,6 +36,13 @@ export interface BlockEditorProps<T = Record<string, unknown>> {
   value: T;
   onChange: (next: T) => void;
   errors?: Record<string, string[]>;
+  /**
+   * Callback để mở media picker — do host app cung cấp.
+   * Hero Editor sẽ gọi hàm này khi user click "Choose image".
+   * Host app tự quyết định dùng modal nào (admin-web: MediaPickerModal,
+   * apps/web: MediaPicker) và khi chọn xong sẽ gọi onChange với image mới.
+   */
+  onOpenMediaPicker?: () => void;
 }
 
 // Props cho Renderer component của mỗi block
