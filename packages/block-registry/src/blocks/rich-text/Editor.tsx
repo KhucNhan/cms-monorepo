@@ -6,10 +6,19 @@ import {
   plainTextToContent,
 } from './rich-text.utils';
 
+/**
+ * `variant`:
+ * - 'admin' (mặc định): kích thước như cũ.
+ * - 'web': input/text nhỏ hơn, gọn hơn (apps/web edit-mode). Layout vốn đã 1 cột dọc
+ *   nên không cần đổi cấu trúc grid, chỉ đổi spacing/kích thước.
+ */
 export function RichTextEditor({
   value,
   onChange,
+  variant = 'admin',
 }: BlockEditorProps<RichTextData>) {
+  const isWeb = variant === 'web';
+
   const textAlign = value.textAlign ?? 'left';
   const displayText = getRichTextDisplayText(value);
 
@@ -23,13 +32,21 @@ export function RichTextEditor({
     });
   };
 
+  const labelCls = isWeb
+    ? 'text-label-sm font-bold text-on-surface'
+    : 'text-label-md font-bold text-on-surface';
+  const selectCls = isWeb
+    ? 'max-w-xs rounded-md border border-outline-variant bg-surface px-xs py-1 text-body-sm outline-none focus:border-primary'
+    : 'max-w-xs rounded-lg border border-outline-variant bg-surface px-sm py-2 text-body-md outline-none focus:border-primary';
+  const textareaCls = isWeb
+    ? 'w-full pl-2 rounded-md border border-outline-variant bg-surface px-xs py-1 text-body-sm outline-none focus:border-primary'
+    : 'w-full rounded-lg border border-outline-variant bg-surface px-sm py-2 text-body-md outline-none focus:border-primary';
+
   return (
-    <div className="flex flex-col gap-md">
+    <div className={isWeb ? 'flex flex-col gap-sm' : 'flex flex-col gap-md'}>
       {/* Text Alignment */}
       <div className="flex flex-col gap-xs">
-        <label className="text-label-md font-bold text-on-surface">
-          Text Alignment
-        </label>
+        <label className={labelCls}>Text Alignment</label>
 
         <select
           value={textAlign}
@@ -39,7 +56,7 @@ export function RichTextEditor({
               textAlign: e.target.value as RichTextData['textAlign'],
             })
           }
-          className="max-w-xs rounded-lg border border-outline-variant bg-surface px-sm py-2 text-body-md outline-none focus:border-primary"
+          className={selectCls}
         >
           <option value="left">Left</option>
           <option value="center">Center</option>
@@ -50,22 +67,19 @@ export function RichTextEditor({
 
       {/* Content */}
       <div className="flex flex-col gap-xs">
-        <label className="text-label-md font-bold text-on-surface">
-          Content
-        </label>
+        <label className={labelCls}>Content</label>
 
         <textarea
-          rows={6}
+          rows={isWeb ? 4 : 6}
           value={displayText}
           onChange={(e) => handleContentChange(e.target.value)}
-          className="w-full rounded-lg border border-outline-variant bg-surface px-sm py-2 text-body-md outline-none focus:border-primary"
+          className={textareaCls}
           placeholder="Write your content here..."
         />
 
-        <p className="text-[11px] text-on-surface-variant">
-          Edits update the ProseMirror{' '}
-          <code className="font-mono">content</code> field. Use new lines for
-          separate paragraphs.
+        <p className={isWeb ? 'text-[10px] text-on-surface-variant' : 'text-[11px] text-on-surface-variant'}>
+          Edits update the ProseMirror <code className="font-mono">content</code> field. Use new
+          lines for separate paragraphs.
         </p>
       </div>
     </div>
