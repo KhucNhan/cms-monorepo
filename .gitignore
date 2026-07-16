@@ -11,3 +11,6 @@ prisma/migrations/*.sql.bak
 cms-deploy-key 
 cms-deploy-key.pub
 *.tsbuildinfo
+apps/admin-api/prisma/*.js
+apps/admin-api/prisma/*.js.map
+apps/admin-api/prisma/*.d.ts

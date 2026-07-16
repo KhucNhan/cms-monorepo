@@ -16,6 +16,16 @@ if [ "${DEPLOY_REEXECED:-}" != "1" ]; then
   echo "==> Pulling latest master"
   git fetch origin
   git reset --hard origin/master
+
+  # `git reset --hard` does NOT remove untracked files. tsconfig.tsbuildinfo
+  # is gitignored (build cache), so it survives across deploys on the server
+  # and can hold a stale fingerprint from a previous tsconfig.json (rootDir,
+  # exclude, etc.) — tsc then thinks dist/main.js is already up-to-date and
+  # silently skips emitting it (no error, no output). Always start clean.
+  echo "==> Cleaning stale incremental build caches (untracked, not removed by reset --hard)"
+  rm -f apps/admin-api/tsconfig.tsbuildinfo
+  rm -rf apps/admin-api/dist
+
   export DEPLOY_REEXECED=1
   exec bash "$0"
 fi
