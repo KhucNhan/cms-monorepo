@@ -291,3 +291,20 @@ KHÔNG cần lặp lại các bước thủ công Section 1-8 nữa trừ khi:
 Gotcha quan trọng đã gặp: `deploy.sh` tự `git reset --hard` chính file đang thực thi
 (self-modifying script) — script phải `exec bash "$0"` sau khi pull để tránh chạy
 nhầm nội dung cũ đã nạp vào bộ nhớ trước đó. Không xoá đoạn re-exec này khi sửa file.
+
+## X. MinIO — Set Public Read Policy (bắt buộc sau khi tạo bucket)
+
+Console UI (port 9001) không còn hỗ trợ đổi Anonymous Access qua giao diện ở bản MinIO mới —
+phải set bằng `mc` CLI, chạy alias + policy trong CÙNG một `docker exec` session:
+
+```bash
+docker exec cms-minio sh -c "
+  mc alias set local http://localhost:9000 <MINIO_ROOT_USER> <MINIO_ROOT_PASSWORD> &&
+  mc anonymous set download local/cms-media
+"
+```
+
+⚠️ Không dùng `docker run --rm minio/mc` cho 2 lệnh tách rời — mỗi `--rm` container là
+môi trường mới, alias set ở lệnh trước sẽ không tồn tại ở lệnh sau.
+
+Verify: `curl -I http://localhost:9000/cms-media/<key>` phải trả `200 OK`.

@@ -4,7 +4,8 @@
     "outDir": "./dist",
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "prisma/**/*.ts"
   ],
   "exclude": [
     "node_modules",

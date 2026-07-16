@@ -18,6 +18,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts --pool=threads"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1088.0",
     "@cms/block-registry": "workspace:*",
     "@cms/shared-types": "workspace:*",
     "@fastify/cookie": "^11.0.2",
