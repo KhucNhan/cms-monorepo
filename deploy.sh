@@ -6,9 +6,9 @@
 set -euo pipefail
 cd ~/cms-monorepo
 
-echo "==> Pulling latest main"
+echo "==> Pulling latest master"
 git fetch origin
-git reset --hard origin/main
+git reset --hard origin/master
 
 echo "==> Installing dependencies"
 # NEVER set NODE_ENV=production before install/build — pnpm would skip devDependencies
