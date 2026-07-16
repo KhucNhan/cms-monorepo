@@ -4,6 +4,11 @@
 # Mirrors the manual steps in DEPLOYMENT.md — keep both in sync if you change one.
 
 set -euo pipefail
+
+# SSH non-interactive shell (GitHub Actions gọi vào) không tự load ~/.bashrc,
+# nên PATH thiếu pnpm/node do nvm quản lý. Thêm tường minh path thật của server.
+export PATH="/root/.nvm/versions/node/v22.18.0/bin:$PATH"
+
 cd ~/cms-monorepo
 
 echo "==> Pulling latest master"
