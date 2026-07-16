@@ -2,6 +2,7 @@ cms-monorepo
 ├── README.md
 ├── AGENTS.md
 ├── ARCHITECTURE-DESIGN.md
+├── deploy.sh
 ├── DEPLOYMENT.md
 ├── admin.api.structure.md
 ├── admin.web.structure.md
@@ -22,5 +23,7 @@ cms-monorepo
 │   ├── query_engine.dll.node.gz
 │   ├── schema-engine.exe
 │   └── schema-engine.exe.gz
+├── .github
+│   ├── workflows
 ├── turbo.json
 └── web.structure.md

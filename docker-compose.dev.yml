@@ -1,0 +1,32 @@
+# docker-compose.dev.yml (đặt ở root cms-monorepo)
+services:
+  postgres:
+    image: postgres:16
+    container_name: cms-postgres
+    environment:
+      POSTGRES_USER: cms_user
+      POSTGRES_PASSWORD: cms_password
+      POSTGRES_DB: cms_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - cms_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: cms-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - '9000:9000'   # S3 API
+      - '9001:9001'   # Web console
+    volumes:
+      - cms_minio_data:/data
+    restart: unless-stopped
+
+volumes:
+  cms_pgdata:
+  cms_minio_data:

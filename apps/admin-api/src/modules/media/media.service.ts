@@ -6,13 +6,12 @@ import {
   ConflictException
 } from '@nestjs/common';
 import { z } from 'zod';
-import { createWriteStream, existsSync, mkdirSync, unlinkSync, renameSync, readFileSync, writeFileSync } from 'fs';
-import { join, extname, basename } from 'path';
-import { pipeline } from 'stream/promises';
+import { extname, basename } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from './storage.service';
 import { ErrorCode } from '@cms/shared-types';
 import { getBlockDefinition } from '@cms/block-registry/schema-only';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { optimizeImage, isRasterImage, MEDIA_VARIANT_PRESETS, decideOriginalVariant } from './image-optimizer.util';
 
 export const listMediaSchema = z.object({
@@ -64,36 +63,11 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 @Injectable()
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
-  private readonly uploadDir: string;
-  /**
-   * Base URL tuyệt đối của admin-api (vd: https://api.khucnhan.io.vn), dùng để build
-   * `url`/`detailUrl`/`thumbUrl` tuyệt đối thay vì relative `/uploads/...`.
-   *
-   * Lý do bắt buộc phải tuyệt đối: relative path chỉ "vô tình" hoạt động bên trong
-   * admin-web khi Vite dev proxy đang forward /uploads sang :3001. Ở `vite preview`
-   * (bản build production) proxy KHÔNG hoạt động, và khi user "Open in new tab" là
-   * browser điều hướng thẳng vào domain admin-web (không qua JS runtime) — server đó
-   * không có route /uploads/*, rơi vào SPA catch-all -> redirect /dashboard.
-   * Absolute URL trỏ thẳng domain admin-api thì luôn đúng bất kể context truy cập.
-   *
-   * Không set biến này -> fallback rỗng, giữ hành vi relative cũ (chỉ nên dùng cho
-   * local dev nếu chưa cấu hình .env).
-   */
-  private readonly uploadPublicBaseUrl: string;
 
-  constructor(private readonly prisma: PrismaService) {
-    this.uploadDir = join(process.cwd(), 'uploads');
-    if (!existsSync(this.uploadDir)) {
-      mkdirSync(this.uploadDir, { recursive: true });
-    }
-    // Bỏ dấu "/" cuối nếu có, tránh double-slash khi nối với "/uploads/<key>"
-    this.uploadPublicBaseUrl = (process.env.API_PUBLIC_URL ?? '').replace(/\/+$/, '');
-  }
-
-  /** Sinh URL public cho 1 file trong uploadDir — dùng ở MỌI nơi thay vì viết tay `/uploads/${key}`. */
-  private buildUrl(key: string): string {
-    return `${this.uploadPublicBaseUrl}/uploads/${key}`;
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async findAll(params: ListMediaDto) {
     const { page, pageSize, mimeType, search } = params;
@@ -144,13 +118,16 @@ export class MediaService {
 
     const ext = extname(file.filename) || this.extFromMime(file.mimetype);
     const key = await this.generateUniqueKey(file.filename, ext);
-    const filePath = join(this.uploadDir, key);
 
-    await pipeline(file.file, createWriteStream(filePath));
+    // Đọc toàn bộ stream vào buffer (thay vì ghi ra disk như bản cũ) —
+    // buffer này là input duy nhất cho toàn bộ pipeline optimize + upload lên storage.
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.file as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+    const inputBuffer = Buffer.concat(chunks);
 
-    const stats = await import('fs/promises').then((fs) => fs.stat(filePath));
-    if (stats.size > MAX_FILE_SIZE) {
-      unlinkSync(filePath);
+    if (inputBuffer.length > MAX_FILE_SIZE) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
         message: 'File exceeds maximum size of 10 MB.',
@@ -161,7 +138,7 @@ export class MediaService {
     // generateVariants() có thể đổi key/url/mimeType của bản "original" nếu quyết định
     // dùng bản optimize WebP thay vì giữ file gốc (xem decideOriginalVariant()).
     const { finalKey, finalUrl, finalMimeType, ...variants } = await this.generateVariants(
-      filePath,
+      inputBuffer,
       key,
       file.mimetype,
     );
@@ -171,7 +148,7 @@ export class MediaService {
         key: finalKey,
         url: finalUrl,
         mimeType: finalMimeType,
-        fileSize: stats.size,
+        fileSize: inputBuffer.length,
         ...variants,
       },
     });
@@ -180,20 +157,21 @@ export class MediaService {
   /**
    * Sinh 3 variant (original/detail/thumb) từ ảnh raster vừa upload.
    *
-   * - `detail`/`thumb`: luôn convert WebP + ép ≤300KB, ghi ra file riêng cạnh file gốc
-   *   (naming: `<base>.detail.webp`, `<base>.thumb.webp`) — không đổi logic so với trước.
+   * - `detail`/`thumb`: luôn convert WebP + ép ≤300KB, upload thẳng lên storage
+   *   (naming: `<base>.detail.webp`, `<base>.thumb.webp`) — không đổi logic so với trước,
+   *   chỉ đổi đích ghi từ disk local sang `StorageService`.
    * - `original`: áp dụng `decideOriginalVariant()` —
    *     + Size gốc > 300KB, hoặc optimize vẫn nhỏ hơn/bằng gốc → dùng bản optimize WebP,
-   *       key đổi đuôi thành `.webp` (rename file vật lý + xoá file gốc cũ).
-   *     + Size gốc <= 300KB VÀ optimize làm TĂNG size → giữ nguyên file gốc, key/mimeType
-   *       không đổi (không rename, không ghi đè).
+   *       key đổi đuôi thành `.webp`, upload lên key mới.
+   *     + Size gốc <= 300KB VÀ optimize làm TĂNG size → giữ nguyên buffer gốc, key/mimeType
+   *       không đổi, upload nguyên buffer gốc lên storage.
    *   Toàn bộ quyết định + số liệu size trước/sau được log lại để audit.
    *
    * Với SVG: trả nguyên `key`/`mimeType` đầu vào, 4 field detail/thumb rỗng (giữ null trong DB)
    * vì SVG là vector, không cần variant.
    */
   private async generateVariants(
-    sourceFilePath: string,
+    input: Buffer,
     key: string,
     mimeType: string,
   ): Promise<{
@@ -212,16 +190,17 @@ export class MediaService {
       let height: number | null = null;
       try {
         const sharp = await import('sharp');
-        const meta = await sharp.default(sourceFilePath).metadata();
+        const meta = await sharp.default(input).metadata();
         width = meta.width ?? null;
         height = meta.height ?? null;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.warn(`Failed to extract dimensions for SVG ${key}: ${message}`);
       }
+      const finalUrl = await this.storage.upload(key, input, mimeType);
       return {
         finalKey: key,
-        finalUrl: this.buildUrl(key),
+        finalUrl,
         finalMimeType: mimeType,
         width,
         height,
@@ -230,7 +209,6 @@ export class MediaService {
 
     const ext = extname(key);
     const base = key.replace(ext, '');
-    const input = readFileSync(sourceFilePath);
 
     const [detail, thumb] = await Promise.all([
       optimizeImage(input, MEDIA_VARIANT_PRESETS.detail),
@@ -239,8 +217,8 @@ export class MediaService {
 
     const detailKey = `${base}.detail.webp`;
     const thumbKey = `${base}.thumb.webp`;
-    writeFileSync(join(this.uploadDir, detailKey), detail.buffer);
-    writeFileSync(join(this.uploadDir, thumbKey), thumb.buffer);
+    const detailUrl = await this.storage.upload(detailKey, detail.buffer, 'image/webp');
+    const thumbUrl = await this.storage.upload(thumbKey, thumb.buffer, 'image/webp');
 
     // ── Variant "original": so sánh size gốc vs size sau optimize, quyết định giữ cái nào ──
     const decision = await decideOriginalVariant(input, mimeType, ext);
@@ -254,12 +232,15 @@ export class MediaService {
     );
 
     let finalKey = key;
+    let finalUrl: string;
+
     if (decision.usedOriginal) {
-      // Giữ nguyên file gốc đã ghi ở bước upload() trước đó — không đụng tới sourceFilePath.
+      // Giữ nguyên buffer gốc — upload thẳng lên key ban đầu, không đổi mimeType/extension.
       this.logger.warn(
         `[upload][original] file="${key}": KEEP the original file because optimizing will INCREASE its size ` +
         `(+${optimizedSizeBytes - originalSizeBytes}B). mimeType/extension không đổi.`,
       );
+      finalUrl = await this.storage.upload(key, decision.buffer, mimeType);
     } else {
       const savedBytes = originalSizeBytes - optimizedSizeBytes;
       const savedPercent = originalSizeBytes > 0 ? ((savedBytes / originalSizeBytes) * 100).toFixed(1) : '0';
@@ -268,31 +249,30 @@ export class MediaService {
       );
 
       finalKey = ext.toLowerCase() === '.webp' ? key : `${base}.webp`;
-      const finalPath = join(this.uploadDir, finalKey);
-      writeFileSync(finalPath, decision.buffer);
-
-      // Nếu extension đổi (vd .jpg -> .webp), xoá file gốc cũ để không rác file mồ côi trên disk.
-      if (finalKey !== key && existsSync(sourceFilePath)) {
-        unlinkSync(sourceFilePath);
-      }
+      finalUrl = await this.storage.upload(finalKey, decision.buffer, 'image/webp');
+      // Không có "file gốc trên disk cần xoá" như bản cũ — vì chưa từng ghi input ra disk,
+      // chỉ có buffer trong memory, nên không tạo ra object rác nào trên storage cần dọn.
     }
 
     return {
       finalKey,
-      finalUrl: this.buildUrl(finalKey),
+      finalUrl,
       finalMimeType: decision.mimeType,
       width: decision.width,
       height: decision.height,
       detailKey,
-      detailUrl: this.buildUrl(detailKey),
+      detailUrl,
       thumbKey,
-      thumbUrl: this.buildUrl(thumbKey),
+      thumbUrl,
     };
   }
 
   /**
-   * Đổi tên hiển thị của media (đồng thời đổi tên file vật lý trên disk và `key`/`url` trong DB).
+   * Đổi tên hiển thị của media (đồng thời đổi key vật lý trên storage và `key`/`url` trong DB).
    * Đồng bộ đổi tên luôn 2 file variant (detail/thumb) nếu có, giữ nguyên hậu tố `.detail.webp`/`.thumb.webp`.
+   *
+   * StorageService.rename() thực hiện copy-sang-key-mới + xoá key cũ (S3/MinIO không có
+   * "rename" thật như filesystem).
    */
   async rename(id: string, newNameRaw: string) {
     const media = await this.findOne(id);
@@ -315,20 +295,18 @@ export class MediaService {
     const oldBase = media.key.replace(ext, '');
     const newBase = newKey.replace(ext, '');
 
-    this.renamePhysicalFile(media.key, newKey);
-    const data: Record<string, string> = { key: newKey, url: this.buildUrl(newKey) };
+    const newUrl = await this.storage.rename(media.key, newKey);
+    const data: Record<string, string> = { key: newKey, url: newUrl };
 
     if (media.detailKey) {
       const newDetailKey = media.detailKey.replace(oldBase, newBase);
-      this.renamePhysicalFile(media.detailKey, newDetailKey);
+      data.detailUrl = await this.storage.rename(media.detailKey, newDetailKey);
       data.detailKey = newDetailKey;
-      data.detailUrl = this.buildUrl(newDetailKey);
     }
     if (media.thumbKey) {
       const newThumbKey = media.thumbKey.replace(oldBase, newBase);
-      this.renamePhysicalFile(media.thumbKey, newThumbKey);
+      data.thumbUrl = await this.storage.rename(media.thumbKey, newThumbKey);
       data.thumbKey = newThumbKey;
-      data.thumbUrl = this.buildUrl(newThumbKey);
     }
 
     return this.prisma.media.update({ where: { id }, data });
@@ -337,8 +315,8 @@ export class MediaService {
   /**
    * Update metadata (name và/hoặc altText) trong 1 lần ghi DB duy nhất.
    *
-   * - Nếu `dto.name` có: chạy toàn bộ rename logic (sanitize → unique key → rename file vật lý)
-   *   để tính bộ `key`/`url`/`detailKey`/... mới — nhưng KHÔNG ghi DB trong rename, chỉ build `data`.
+   * - Nếu `dto.name` có: chạy toàn bộ rename logic (sanitize → unique key → rename trên storage)
+   *   để tính bộ `key`/`url`/`detailKey`/... mới — nhưng KHÔNG ghi DB trong lúc rename, chỉ build `data`.
    *   Sau đó merge `altText` (nếu có) vào `data` cùng lúc, gọi `prisma.media.update()` 1 lần.
    * - Nếu chỉ `dto.altText`: cập nhật 1 field, 1 round-trip DB.
    */
@@ -362,22 +340,19 @@ export class MediaService {
         const oldBase = media.key.replace(ext, '');
         const newBase = newKey.replace(ext, '');
 
-        // Rename file vật lý (filesystem only — không phải DB write)
-        this.renamePhysicalFile(media.key, newKey);
+        // Rename trên storage (copy + delete) — không phải DB write
+        updateData.url = await this.storage.rename(media.key, newKey);
         updateData.key = newKey;
-        updateData.url = this.buildUrl(newKey);
 
         if (media.detailKey) {
           const newDetailKey = media.detailKey.replace(oldBase, newBase);
-          this.renamePhysicalFile(media.detailKey, newDetailKey);
+          updateData.detailUrl = await this.storage.rename(media.detailKey, newDetailKey);
           updateData.detailKey = newDetailKey;
-          updateData.detailUrl = this.buildUrl(newDetailKey);
         }
         if (media.thumbKey) {
           const newThumbKey = media.thumbKey.replace(oldBase, newBase);
-          this.renamePhysicalFile(media.thumbKey, newThumbKey);
+          updateData.thumbUrl = await this.storage.rename(media.thumbKey, newThumbKey);
           updateData.thumbKey = newThumbKey;
-          updateData.thumbUrl = this.buildUrl(newThumbKey);
         }
       }
     }
@@ -394,12 +369,6 @@ export class MediaService {
 
     // 1 lần write DB duy nhất — tránh 2 round-trip và race condition
     return this.prisma.media.update({ where: { id }, data: updateData });
-  }
-
-  private renamePhysicalFile(oldKey: string, newKey: string) {
-    const oldPath = join(this.uploadDir, oldKey);
-    const newPath = join(this.uploadDir, newKey);
-    if (existsSync(oldPath)) renameSync(oldPath, newPath);
   }
 
   async getUsages(id: string): Promise<MediaUsageInfo[]> {
@@ -419,15 +388,19 @@ export class MediaService {
       });
     }
 
-    const deleteAllVariantFiles = () => {
+    const deleteAllVariantFiles = async () => {
       for (const k of [media.key, media.detailKey, media.thumbKey]) {
         if (!k) continue;
-        const p = join(this.uploadDir, k);
-        if (existsSync(p)) unlinkSync(p);
+        await this.storage.delete(k);
       }
     };
 
     if (usages.length > 0) {
+      // Lưu ý: deleteAllVariantFiles() (gọi storage) nằm TRONG transaction Prisma như bản gốc —
+      // nếu transaction rollback (parse lỗi ở 1 block), các lệnh xoá trên storage đã gọi
+      // trước đó KHÔNG tự rollback theo (S3/MinIO không tham gia transaction DB). Đây là hành vi
+      // giữ nguyên y hệt bản cũ (fs cũng không transactional với Prisma) — không phải regression
+      // mới, chỉ ghi chú lại vì đổi sang network I/O khiến rủi ro này rõ ràng hơn trước.
       await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         for (const usage of usages) {
           const block = await tx.block.findUnique({ where: { id: usage.blockId } });
@@ -448,14 +421,14 @@ export class MediaService {
           await tx.block.update({ where: { id: block.id }, data: { data: parsed.data } });
         }
 
-        deleteAllVariantFiles();
+        await deleteAllVariantFiles();
         await tx.media.delete({ where: { id } });
       });
 
       return { deleted: true, strippedFromBlocks: usages.length };
     }
 
-    deleteAllVariantFiles();
+    await deleteAllVariantFiles();
     await this.prisma.media.delete({ where: { id } });
     return { deleted: true };
   }

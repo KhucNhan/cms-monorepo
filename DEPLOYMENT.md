@@ -278,3 +278,33 @@ curl https://www.khucnhan.io.vn
 - **Do not** run Prisma Studio (port 5555) as a persistent/public service via PM2 — it has no
   authentication. Only run it temporarily for debugging, or access it through a dedicated SSH
   tunnel (`ssh -L 5555:localhost:5555 ...`). Do not add it to Cloudflare Tunnel `config.yml`.
+  
+## 13. CI/CD (từ 2026-07)
+
+Deploy giờ tự động qua GitHub Actions (`.github/workflows/ci-cd.yml`) mỗi khi push
+vào `master`: test → build → SSH qua Netbird → chạy `deploy.sh` trên server → PM2 restart.
+
+KHÔNG cần lặp lại các bước thủ công Section 1-8 nữa trừ khi:
+- Bootstrap server hoàn toàn mới (chưa từng cài Netbird/PM2/`deploy.sh`)
+- Debug deploy.sh trực tiếp (`bash ~/cms-monorepo/deploy.sh`) khi CI fail
+
+Gotcha quan trọng đã gặp: `deploy.sh` tự `git reset --hard` chính file đang thực thi
+(self-modifying script) — script phải `exec bash "$0"` sau khi pull để tránh chạy
+nhầm nội dung cũ đã nạp vào bộ nhớ trước đó. Không xoá đoạn re-exec này khi sửa file.
+
+## X. MinIO — Set Public Read Policy (bắt buộc sau khi tạo bucket)
+
+Console UI (port 9001) không còn hỗ trợ đổi Anonymous Access qua giao diện ở bản MinIO mới —
+phải set bằng `mc` CLI, chạy alias + policy trong CÙNG một `docker exec` session:
+
+```bash
+docker exec cms-minio sh -c "
+  mc alias set local http://localhost:9000 <MINIO_ROOT_USER> <MINIO_ROOT_PASSWORD> &&
+  mc anonymous set download local/cms-media
+"
+```
+
+⚠️ Không dùng `docker run --rm minio/mc` cho 2 lệnh tách rời — mỗi `--rm` container là
+môi trường mới, alias set ở lệnh trước sẽ không tồn tại ở lệnh sau.
+
+Verify: `curl -I http://localhost:9000/cms-media/<key>` phải trả `200 OK`.
