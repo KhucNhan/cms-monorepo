@@ -5,15 +5,28 @@
 
 set -euo pipefail
 
+# ── Bước 1: Pull code mới, rồi RE-EXEC chính mình ──────────────────────────
+# Quan trọng: bash đọc file này vào lúc bắt đầu chạy — nếu `git reset` bên dưới
+# ghi đè chính file đang thực thi, các dòng lệnh còn lại vẫn chạy theo nội dung
+# CŨ (fd cũ trỏ vào inode cũ). Để tránh "self-modifying script" gotcha này,
+# script chỉ pull code rồi tự re-exec (`exec bash "$0"`) để bash đọc lại từ đầu,
+# đảm bảo phần build/deploy phía dưới luôn chạy đúng bản mới nhất vừa pull về.
+if [ "${DEPLOY_REEXECED:-}" != "1" ]; then
+  cd ~/cms-monorepo
+  echo "==> Pulling latest master"
+  git fetch origin
+  git reset --hard origin/master
+  export DEPLOY_REEXECED=1
+  exec bash "$0"
+fi
+
+# ── Từ đây trở xuống luôn chạy trên bản deploy.sh mới nhất vừa pull ────────
+
 # SSH non-interactive shell (GitHub Actions gọi vào) không tự load ~/.bashrc,
 # nên PATH thiếu pnpm/node do nvm quản lý. Thêm tường minh path thật của server.
 export PATH="/root/.nvm/versions/node/v22.18.0/bin:$PATH"
 
 cd ~/cms-monorepo
-
-echo "==> Pulling latest master"
-git fetch origin
-git reset --hard origin/master
 
 echo "==> Installing dependencies"
 # NEVER set NODE_ENV=production before install/build — pnpm would skip devDependencies
