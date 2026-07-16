@@ -9,4 +9,5 @@ coverage
 uploads/
 prisma/migrations/*.sql.bak
 cms-deploy-key 
-cms-deploy-key.pub 
+cms-deploy-key.pub
+*.tsbuildinfo
