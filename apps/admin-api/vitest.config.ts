@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import swc from 'unplugin-swc';
 
 export default defineConfig({
   test: {
@@ -6,4 +7,9 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.spec.ts'],
   },
+  plugins: [
+    swc.vite({
+      module: { type: 'es6' },
+    }),
+  ],
 });
