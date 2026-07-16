@@ -1,0 +1,143 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  PNPM_VERSION: 9.12.3
+  NODE_VERSION: 20
+
+jobs:
+  # ---------------------------------------------------------------------
+  # 1) TEST — runs on every push/PR. Builds shared-types + block-registry
+  #    first (admin-api imports shared-types from dist/), then runs the
+  #    admin-api test suite (the 3 spec files: rbac e2e, auth.service,
+  #    page-versions).
+  # ---------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cms_user
+          POSTGRES_PASSWORD: cms_test_pw
+          POSTGRES_DB: cms_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cms_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Order is mandatory: admin-api imports shared-types from dist/
+      - name: Build shared packages
+        run: |
+          pnpm --filter @cms/shared-types build
+          pnpm --filter @cms/block-registry build
+
+      - name: Generate Prisma client
+        run: pnpm --filter admin-api exec prisma generate
+
+      - name: Run DB migrations (test DB)
+        run: pnpm --filter admin-api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
+
+      - name: Seed test DB (admin user needed by rbac.e2e-spec.ts)
+        run: pnpm --filter admin-api exec ts-node prisma/seed.ts
+        env:
+          DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
+          SEED_ADMIN_EMAIL: admin@example.com
+          SEED_ADMIN_PASSWORD: ${{ secrets.TEST_SEED_ADMIN_PASSWORD }}
+
+      - name: Run unit tests
+        run: pnpm --filter admin-api test
+        env:
+          DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+          NODE_ENV: test
+
+      - name: Run e2e tests (rbac)
+        run: pnpm --filter admin-api test:e2e
+        env:
+          DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+          JWT_ACCESS_EXPIRES_IN: 15m
+          JWT_REFRESH_EXPIRES_IN: 7d
+          ADMIN_API_PORT: 3001
+          NODE_ENV: test
+          WEB_URL: http://localhost:3000
+          REVALIDATE_SECRET: test-revalidate-secret
+          SEED_ADMIN_EMAIL: admin@example.com
+          SEED_ADMIN_PASSWORD: ${{ secrets.TEST_SEED_ADMIN_PASSWORD }}
+          COOKIE_SECRET: test-cookie-secret
+          CORS_ORIGIN: http://localhost:5173
+          GOOGLE_CLIENT_ID: test-google-client-id
+          GOOGLE_CALLBACK_URL: http://localhost:3001/api/v1/auth/google/callback
+
+  # ---------------------------------------------------------------------
+  # 2) DEPLOY — only after tests pass, only on push to main.
+  #    The runner joins the Netbird mesh network (server is only
+  #    reachable through it), then SSHes in and runs deploy.sh, which
+  #    already lives on the server (see deploy.sh alongside this file).
+  # ---------------------------------------------------------------------
+  deploy:
+    name: Deploy
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Netbird client
+        run: curl -fsSL https://pkgs.netbird.io/install.sh | sh
+
+      - name: Join Netbird network
+        run: |
+          sudo netbird up --setup-key "${{ secrets.NETBIRD_SETUP_KEY }}" \
+            --management-url "${{ secrets.NETBIRD_MANAGEMENT_URL }}"
+          # give the peer a few seconds to establish routes/handshakes
+          sleep 10
+          sudo netbird status
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy over SSH
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=20 \
+              "${{ secrets.SSH_USER }}@${{ secrets.SERVER_HOST }}" \
+              "bash ~/cms-monorepo/deploy.sh"
+
+      - name: Leave Netbird network
+        if: always()
+        run: sudo netbird down || true

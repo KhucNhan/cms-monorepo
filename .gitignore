@@ -8,3 +8,5 @@ dist
 coverage
 uploads/
 prisma/migrations/*.sql.bak
+cms-deploy-key 
+cms-deploy-key.pub 

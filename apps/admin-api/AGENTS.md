@@ -266,3 +266,12 @@ Google login links the account. Migration: `add_google_oauth_fields`.
 **Dependencies:** `passport-google-oauth20` + `@types/passport-google-oauth20` are still installed
 (used only by the inert `GoogleStrategy`, kept as reference — see Section 8 gap note); the actual
 runtime flow's only new dependency is `axios`.
+
+## 11. Test — chủ đích tối giản (không phải thiếu sót)
+
+Chỉ giữ 3 test bảo vệ đúng những invariant có hậu quả nghiêm trọng nhất nếu vi phạm:
+`page-versions.service.spec.ts` (publish không mutate published version — 1.5),
+`auth.service.spec.ts` (Google OAuth existing-users-only — Section 8),
+`test/rbac.e2e-spec.ts` (mọi route đều cần permission — Section 5). Đây là quyết định
+có chủ đích để giảm chi phí maintain ở quy mô team hiện tại — không tự ý mở rộng thêm
+test cho các module khác (users, roles, media CRUD cơ bản) trừ khi được yêu cầu rõ ràng.
