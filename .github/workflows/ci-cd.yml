@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   PNPM_VERSION: 9.12.3
@@ -73,11 +73,17 @@ jobs:
           SEED_ADMIN_EMAIL: admin@example.com
           SEED_ADMIN_PASSWORD: ${{ secrets.TEST_SEED_ADMIN_PASSWORD }}
 
-      - name: Run admin-api tests
-        run: pnpm --filter admin-api test -- run
+      - name: Run unit tests
+        run: pnpm --filter admin-api test
         env:
-          # rbac.e2e-spec.ts spins up the real AppModule and logs in as seed admin,
-          # so a reachable Postgres + seeded admin user are required for the e2e test.
+          DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+          NODE_ENV: test
+
+      - name: Run e2e tests (rbac)
+        run: pnpm --filter admin-api test:e2e
+        env:
           DATABASE_URL: postgresql://cms_user:cms_test_pw@localhost:5432/cms_db_test?schema=public
           JWT_ACCESS_SECRET: test-access-secret
           JWT_REFRESH_SECRET: test-refresh-secret
@@ -91,6 +97,8 @@ jobs:
           SEED_ADMIN_PASSWORD: ${{ secrets.TEST_SEED_ADMIN_PASSWORD }}
           COOKIE_SECRET: test-cookie-secret
           CORS_ORIGIN: http://localhost:5173
+          GOOGLE_CLIENT_ID: test-google-client-id
+          GOOGLE_CALLBACK_URL: http://localhost:3001/api/v1/auth/google/callback
 
   # ---------------------------------------------------------------------
   # 2) DEPLOY — only after tests pass, only on push to main.
@@ -101,7 +109,7 @@ jobs:
   deploy:
     name: Deploy
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - name: Install Netbird client
