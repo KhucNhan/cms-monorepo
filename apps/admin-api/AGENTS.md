@@ -202,6 +202,22 @@ root, this is the cause. Always call `pnpm --filter admin-api prisma:migrate` di
   `/auth/google/callback` without re-verifying the Fastify issue is actually resolved — see
   Section 10.
 
+## Known gap: Rename media không tự sync `url` đã lưu cứng trong `Block.data`
+
+`MediaService.rename()` chỉ cập nhật `Media.url`/`key` trong bảng `media` — KHÔNG quét/update
+ngược các `Block.data` (JSONB) đang tham chiếu `mediaId` đó. Vì `hero.image` lưu cả `{ mediaId, url }`
+(không chỉ `mediaId`) tại thời điểm admin chọn ảnh trong `MediaPicker`, sau khi rename, `url` cũ
+trong `Block.data` bị stale — hiển thị lỗi 404 trên `apps/web` dù `Media.url` trong DB đã đúng.
+
+**Workaround hiện tại**: mở lại page bị ảnh hưởng trong admin-web → chọn lại ảnh trong
+BlockDataForm → Save Draft → Publish, để `url` được ghi đè bằng giá trị mới.
+
+**Fix triệt để (chưa làm — flag cho task sau)**: sau khi `rename()`, chạy `findUsages(mediaId)`
+(logic đã có sẵn, dùng bởi delete-usage-check) để tìm mọi block đang tham chiếu, rồi cập nhật
+`url` trong `Block.data` của các block đó ngay trong cùng transaction. Cần cẩn thận: chỉ patch
+`url`, không đổi `mediaId`, và phải validate lại qua Zod schema của block đó trước khi ghi (giống
+cách `stripMediaReference()` làm khi delete).
+
 ## 9. CORS for multi-subdomain deployment
 
 When `admin-web`/`admin-api` are on different subdomains: declare all domains in `CORS_ORIGIN`
