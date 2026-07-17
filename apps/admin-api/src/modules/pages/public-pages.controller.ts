@@ -47,6 +47,11 @@ export class PublicPagesController {
     const page = await this.prisma.page.findFirst({
       where: { slug },
       include: {
+        template: {
+          include: {
+            placeholders: { orderBy: { orderIndex: 'asc' } },
+          },
+        },
         publishedVersion: {
           include: {
             blocks: { orderBy: { orderIndex: 'asc' } },
@@ -61,8 +66,14 @@ export class PublicPagesController {
 
     const seoMeta = (page.publishedVersion.seoMeta ?? {}) as Record<string, unknown>;
 
+    let rawBlocks = page.publishedVersion.blocks;
+    if (page.template) {
+      const { mergeTemplateWithPage } = await import('../templates/template-merge.util');
+      rawBlocks = mergeTemplateWithPage(page.template.placeholders, rawBlocks);
+    }
+
     const blocks = await Promise.all(
-      page.publishedVersion.blocks.map(async (b: (typeof page.publishedVersion.blocks)[number]) => ({
+      rawBlocks.map(async (b) => ({
         id: b.id,
         type: b.type,
         order: b.orderIndex,

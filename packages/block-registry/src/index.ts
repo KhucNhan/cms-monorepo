@@ -4,4 +4,5 @@ export * from './registry';
 export * from './blocks/hero';
 export * from './blocks/rich-text';
 export * from './blocks/faq';
+export * from './blocks/content-outlet';
 export * from './shared/JsonFallbackEditor';

@@ -46,7 +46,7 @@ export type BlockType = 'hero' | 'rich-text' | 'faq';
 
 export interface Block<T = unknown> {
   id: string;
-  type: BlockType;
+  type: string;
   order: number;
   data: T;
 }

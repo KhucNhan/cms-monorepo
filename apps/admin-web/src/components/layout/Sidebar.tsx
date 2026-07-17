@@ -10,6 +10,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/media-library',       label: 'Media Library',       icon: 'perm_media' },
   { path: '/users',               label: 'Users',               icon: 'group' },
   { path: '/roles',               label: 'Roles',               icon: 'policy' },
+  { path: '/templates',           label: 'Templates',           icon: 'view_carousel' },
 ];
 
 export function Sidebar() {

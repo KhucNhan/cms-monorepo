@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
-export type PermissionResource = 'page' | 'media' | 'user' | 'role';
+export type PermissionResource = 'page' | 'media' | 'user' | 'role' | 'template';
 export type PermissionAction = 'create' | 'read' | 'update' | 'delete' | 'publish';
 export type PermissionString = `${PermissionResource}:${PermissionAction}`;
 

@@ -46,7 +46,7 @@ export const pagesApi = {
    * POST /api/v1/pages
    * Tạo page mới (tự động tạo DRAFT version)
    */
-  create: (data: { slug: string; title?: string; seoMeta?: Record<string, unknown> }) =>
+  create: (data: { slug: string; title?: string; seoMeta?: Record<string, unknown>; templateId?: string }) =>
     apiClient.post<Page>('/pages', data),
 
   /**

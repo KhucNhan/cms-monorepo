@@ -18,7 +18,7 @@ interface BlockRendererProps {
 }
 
 export function BlockRenderer({ block }: BlockRendererProps) {
-  const Component = registry[block.type];
+  const Component = registry[block.type as BlockType];
 
   if (!Component) {
     if (process.env.NODE_ENV === 'development') {

@@ -38,6 +38,23 @@ export interface LoginPayload {
 // ─── Pages (khớp với Prisma schema của BE) ───────────────────────────────────
 
 export type VersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type TemplateContentType = 'BLOG' | 'PROJECT';
+
+export interface TemplatePlaceholder {
+  id: string;
+  templateId: string;
+  type: string;
+  orderIndex: number;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  contentType: TemplateContentType;
+  createdAt: string;
+  updatedAt: string;
+  placeholders?: TemplatePlaceholder[];
+}
 
 export interface Block {
   id: string;
@@ -96,6 +113,7 @@ export interface Page {
   slug: string;
   title: string;
   createdAt: string;
+  templateId: string | null;
   publishedVersionId: string | null;
   publishedVersion: {
     id: string;

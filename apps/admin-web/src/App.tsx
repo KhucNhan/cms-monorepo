@@ -10,6 +10,7 @@ import { UsersManagementPage } from '@/pages/users/UsersManagementPage';
 import { AuthProvider } from '@/context/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { RolesPage } from '@/pages/roles/RolesPage';
+import { TemplatesPage } from '@/pages/templates/TemplatesPage';
 
 // AuthProviderWrapper ensures AuthProvider runs inside the Router context
 // so that useAuth's useNavigate works correctly!
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
           { path: '/media-library', element: <MediaLibraryPage /> },
           { path: '/users', element: <UsersManagementPage /> },
           { path: '/roles', element: <RolesPage /> },
+          { path: '/templates', element: <TemplatesPage /> },
         ],
       },
       {
