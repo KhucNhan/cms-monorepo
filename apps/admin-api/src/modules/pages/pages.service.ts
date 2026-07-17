@@ -17,6 +17,7 @@ export const createPageSchema = z.object({
     ogImage:     z.string().url().optional(),
     noIndex:     z.boolean().optional(),
   }).optional().default({}),
+  templateId: z.string().uuid().optional(),
 });
 
 export const updatePageSchema = z.object({
@@ -93,10 +94,18 @@ export class PagesService {
       throw new ConflictException({ code: ErrorCode.CONFLICT, message: `Slug already exists: ${dto.slug}` });
     }
 
+    if (dto.templateId) {
+      const templateExists = await this.prisma.template.findUnique({ where: { id: dto.templateId } });
+      if (!templateExists) {
+        throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: `Template not found: ${dto.templateId}` });
+      }
+    }
+
     return this.prisma.page.create({
       data: {
         slug: dto.slug,
         title: dto.title ?? '',
+        templateId: dto.templateId ?? null,
         versions: {
           create: {
             status: 'DRAFT',

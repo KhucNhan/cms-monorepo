@@ -9,11 +9,14 @@ interface BlockSectionCardProps {
   totalBlocks: number;
   isDragging?: boolean;
   isDragOver?: boolean;
-  onDragStart: () => void;
-  onDragEnter: () => void;
-  onDragEnd: () => void;
-  onDelete: () => void;
+  onDragStart?: () => void;
+  onDragEnter?: () => void;
+  onDragEnd?: () => void;
+  onDelete?: () => void;
   onUpdateData: (newData: any) => void;
+  disableDelete?: boolean;
+  disableDrag?: boolean;
+  customLabel?: string;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -33,6 +36,9 @@ export function BlockSectionCard({
   onDragEnd,
   onDelete,
   onUpdateData,
+  disableDelete = false,
+  disableDrag = false,
+  customLabel,
 }: BlockSectionCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const icon = ICON_MAP[block.type] ?? 'widgets';
@@ -51,7 +57,7 @@ export function BlockSectionCard({
       }`}
       onDragOver={(e) => {
         e.preventDefault();
-        onDragEnter();
+        if (onDragEnter) onDragEnter();
       }}
       onDrop={(e) => e.preventDefault()}
     >
@@ -72,32 +78,34 @@ export function BlockSectionCard({
       >
         <div className="flex items-center gap-md min-w-0">
           {/* Drag handle */}
-          <span
-            draggable
-            role="button"
-            aria-label="Drag to reorder"
-            title="Drag to reorder"
-            onClick={(e) => e.stopPropagation()}
-            onDragStart={(e) => {
-              e.stopPropagation();
-              e.dataTransfer.effectAllowed = 'move';
-              onDragStart();
-            }}
-            onDragEnd={(e) => {
-              e.stopPropagation();
-              onDragEnd();
-            }}
-            className="material-symbols-outlined text-[20px] text-on-surface-variant cursor-grab active:cursor-grabbing hover:text-primary flex-shrink-0"
-          >
-            drag_indicator
-          </span>
+          {!disableDrag && (
+            <span
+              draggable
+              role="button"
+              aria-label="Drag to reorder"
+              title="Drag to reorder"
+              onClick={(e) => e.stopPropagation()}
+              onDragStart={(e) => {
+                e.stopPropagation();
+                e.dataTransfer.effectAllowed = 'move';
+                if (onDragStart) onDragStart();
+              }}
+              onDragEnd={(e) => {
+                e.stopPropagation();
+                if (onDragEnd) onDragEnd();
+              }}
+              className="material-symbols-outlined text-[20px] text-on-surface-variant cursor-grab active:cursor-grabbing hover:text-primary flex-shrink-0"
+            >
+              drag_indicator
+            </span>
+          )}
 
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <span className="material-symbols-outlined text-primary text-[18px]">{icon}</span>
           </div>
           <div className="min-w-0">
             <span className="text-label-md font-bold text-on-surface capitalize">
-              {block.type.replace('-', ' ')} Block
+              {customLabel || `${block.type.replace('-', ' ')} Block`}
             </span>
           </div>
         </div>
@@ -118,21 +126,25 @@ export function BlockSectionCard({
             </span>
           </button>
 
-          <div className="w-px h-5 bg-outline-variant mx-1" />
+          {!disableDelete && (
+            <>
+              <div className="w-px h-5 bg-outline-variant mx-1" />
 
-          <Can permission="page:update">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all cursor-pointer"
-              title="Delete Block"
-            >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
-          </Can>
+              <Can permission="page:update">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onDelete) onDelete();
+                  }}
+                  className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all cursor-pointer"
+                  title="Delete Block"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </Can>
+            </>
+          )}
         </div>
       </div>
 

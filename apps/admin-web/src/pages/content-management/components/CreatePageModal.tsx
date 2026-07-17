@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { pagesApi } from '@/api/pages.api';
+import { templatesApi } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
-import type { Page } from '@/types';
+import type { Page, Template } from '@/types';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -37,6 +38,8 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugError, setSlugError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
@@ -45,6 +48,12 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
       setSlugTouched(false);
       setSlugError(undefined);
       setSubmitting(false);
+      setSelectedTemplateId('');
+    } else {
+      // Fetch templates
+      templatesApi.list()
+        .then((data) => setTemplates(data))
+        .catch((err) => console.error('Failed to load templates:', err));
     }
   }, [isOpen]);
 
@@ -82,7 +91,11 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
     setSlugError(undefined);
 
     try {
-      const page = await pagesApi.create({ title: title.trim() || undefined, slug });
+      const page = await pagesApi.create({
+        title: title.trim() || undefined,
+        slug,
+        templateId: selectedTemplateId || undefined,
+      });
       onCreated(page);
       onClose();
     } catch (err) {
@@ -134,6 +147,22 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
             error={slugError}
             helperText={!slugError ? 'URL path: /about-us' : undefined}
           />
+
+          <div className="flex flex-col gap-xs">
+            <label className="text-label-sm font-medium text-on-surface-variant">Page Template (Optional)</label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface focus:outline-none"
+            >
+              <option value="">No Template (Free-form layout)</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.contentType})
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex gap-md justify-end pt-sm">
             <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/Button';
@@ -6,13 +6,17 @@ import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { pagesApi } from '@/api/pages.api';
 import { pageVersionsApi } from '@/api/page-versions.api';
 import { blocksApi } from '@/api/blocks.api';
+import { templatesApi } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
 
 import { BlockPickerModal } from './BlockPickerModal';
 import { BlockSectionCard } from './components/BlockSectionCard';
 import { UnsavedChangesModal } from './components/UnsavedChangesModal';
 import { Can } from '@/components/Can';
-import type { PageDetail, Block, PageVersion } from '@/types';
+import type { PageDetail, Block, PageVersion, Template } from '@/types';
+
+// Placeholder block types — block dùng làm placeholder trong template, không phải outlet block tự do
+const PLACEHOLDER_TYPES = new Set(['hero', 'faq']);
 
 export function PageEditPage() {
   const { pageId } = useParams<{ pageId: string }>();
@@ -39,6 +43,10 @@ export function PageEditPage() {
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
   const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
   const [dragOverBlockIndex, setDragOverBlockIndex] = useState<number | null>(null);
+
+  // ─── Template state ────────────────────────────────────────────────────────
+  const [pageTemplate, setPageTemplate] = useState<Template | null>(null);
+  const [isTemplateOpen, setIsTemplateOpen] = useState(true);
 
   // ─── Page Info (title + slug) & SEO (title/description) — 2 section riêng ──
   const [titleInput, setTitleInput] = useState('');
@@ -124,6 +132,19 @@ export function PageEditPage() {
       setOriginalSlug(pageData.slug);
       setOriginalMetaTitle(seoMeta.title ?? '');
       setOriginalMetaDescription(seoMeta.description ?? '');
+
+      // Load template nếu page có templateId
+      if (pageData.templateId) {
+        try {
+          const template = await templatesApi.getOne(pageData.templateId);
+          setPageTemplate(template);
+        } catch (templateErr) {
+          console.warn('Failed to load page template:', templateErr);
+          setPageTemplate(null);
+        }
+      } else {
+        setPageTemplate(null);
+      }
     } catch (err) {
       console.error(err);
       const msg = err instanceof ApiClientError ? err.message : 'Initialization failed.';
@@ -520,7 +541,33 @@ export function PageEditPage() {
     blocker.reset();
   };
 
+  // ─── Template-derived computed state ──────────────────────────────────────
+  // placeholderBlocks: blocks that match a non-outlet template placeholder (keyed by type)
+  // outletBlocks: all other blocks — free-form content zone
+  const { placeholderBlocks, outletBlocks } = useMemo(() => {
+    if (!pageTemplate || !pageTemplate.placeholders) {
+      return { placeholderBlocks: new Map<string, Block>(), outletBlocks: blocks };
+    }
+    const nonOutletTypes = new Set(
+      pageTemplate.placeholders.filter((p) => p.type !== 'content-outlet').map((p) => p.type),
+    );
+    const implementedMap = new Map<string, Block>();
+    const outlet: Block[] = [];
+    for (const block of blocks) {
+      if (nonOutletTypes.has(block.type) && !implementedMap.has(block.type)) {
+        implementedMap.set(block.type, block);
+      } else {
+        // Orphan placeholder blocks are hidden from outlet (shown as info strip instead)
+        if (!PLACEHOLDER_TYPES.has(block.type) || nonOutletTypes.has(block.type)) {
+          outlet.push(block);
+        }
+      }
+    }
+    return { placeholderBlocks: implementedMap, outletBlocks: outlet };
+  }, [blocks, pageTemplate]);
+
   // ─── Render Loading / Error States ────────────────────────────────────────
+
   if (loading && blocks.length === 0) {
     return (
       <AppLayout title="Content Management" >
@@ -781,7 +828,67 @@ export function PageEditPage() {
             )}
           </div>
 
-          {/* Section 3: Page Sections (blocks) — header collapsible, Add Block ở cuối header,
+          {/* Section 3 (Template only): Template Layout Sections */}
+          {pageTemplate && pageTemplate.placeholders && (
+            <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsTemplateOpen((v) => !v)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsTemplateOpen((v) => !v); } }}
+                aria-expanded={isTemplateOpen}
+                className="flex items-center justify-between w-full cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-sm">
+                  <span className="material-symbols-outlined text-secondary text-[20px]">view_carousel</span>
+                  <h3 className="text-h4 font-semibold text-on-surface">Template: {pageTemplate.name}</h3>
+                  <span className="px-sm py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary uppercase">{pageTemplate.contentType}</span>
+                </div>
+                <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
+                  {isTemplateOpen ? 'expand_less' : 'expand_more'}
+                </span>
+              </div>
+
+              {isTemplateOpen && (
+                <div className="flex flex-col gap-md">
+                  <p className="text-body-sm text-on-surface-variant">
+                    This page uses a template layout. Edit each placeholder block below. Free-form content goes in the <strong>Content Outlet</strong> section.
+                  </p>
+
+                  {pageTemplate.placeholders
+                    .filter((p) => p.type !== 'content-outlet')
+                    .map((placeholder) => {
+                      const block = placeholderBlocks.get(placeholder.type);
+                      return (
+                        <div key={placeholder.id}>
+                          {block ? (
+                            <BlockSectionCard
+                              block={block}
+                              index={0}
+                              totalBlocks={1}
+                              customLabel={`${placeholder.type.replace(/-/g, ' ')} (Template Placeholder)`}
+                              disableDelete={true}
+                              disableDrag={true}
+                              onUpdateData={(newData) => updateBlockData(block.id, newData)}
+                            />
+                          ) : (
+                            <div className="border-2 border-dashed border-outline-variant rounded-xl p-lg flex items-center gap-md text-on-surface-variant">
+                              <span className="material-symbols-outlined text-[28px] text-outline-variant">add_circle</span>
+                              <div className="flex-1">
+                                <p className="text-label-md font-bold capitalize">{placeholder.type.replace(/-/g, ' ')} Placeholder</p>
+                                <p className="text-body-sm">No block assigned yet. Add a <strong>{placeholder.type}</strong> block from the Page Sections below to fill this placeholder.</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section 4 (was 3): Page Sections (blocks) — header collapsible, Add Block ở cuối header,
               nội dung tự scroll bên trong thay vì kéo dài toàn trang khi mở rộng */}
           <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
             <div
@@ -798,9 +905,11 @@ export function PageEditPage() {
               className="flex items-center justify-between w-full gap-md cursor-pointer select-none"
             >
               <div className="flex items-center gap-sm min-w-0">
-                <h3 className="text-h4 font-semibold text-on-surface">Page Sections</h3>
+                <h3 className="text-h4 font-semibold text-on-surface">
+                  {pageTemplate ? 'Content Outlet' : 'Page Sections'}
+                </h3>
                 <span className="px-sm py-0.5 rounded-full text-label-sm font-bold bg-outline-variant/30 text-on-surface-variant flex-shrink-0">
-                  {blocks.length}
+                  {pageTemplate ? outletBlocks.length : blocks.length}
                 </span>
               </div>
 
@@ -826,14 +935,19 @@ export function PageEditPage() {
 
             {isBlocksOpen && (
               <div className="max-h-[65vh] overflow-y-auto pr-xs -mr-xs">
-                {blocks.length === 0 ? (
+                {/* When template is active, render only outlet blocks */}
+                {(pageTemplate ? outletBlocks : blocks).length === 0 ? (
                   <div className="flex flex-col items-center justify-center p-xl text-center border-2 border-dashed border-outline-variant rounded-xl bg-surface">
                     <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">
-                      view_stream
+                      {pageTemplate ? 'view_agenda' : 'view_stream'}
                     </span>
-                    <h4 className="text-h4 text-on-surface">No blocks in this page version</h4>
+                    <h4 className="text-h4 text-on-surface">
+                      {pageTemplate ? 'No content blocks yet' : 'No blocks in this page version'}
+                    </h4>
                     <p className="text-body-md text-on-surface-variant max-w-sm mb-lg mt-sm">
-                      Add blocks using the button below to start building the page layout.
+                      {pageTemplate
+                        ? 'Add free-form blocks here. They will appear inside the Content Outlet slot in your template.'
+                        : 'Add blocks using the button below to start building the page layout.'}
                     </p>
                     <Button variant="secondary" icon="add" onClick={() => setShowPicker(true)}>
                       Add First Block
@@ -841,12 +955,12 @@ export function PageEditPage() {
                   </div>
                 ) : (
                   <div className="space-y-lg">
-                    {blocks.map((block, idx) => (
+                    {(pageTemplate ? outletBlocks : blocks).map((block, idx) => (
                       <BlockSectionCard
                         key={block.id}
                         block={block}
                         index={idx}
-                        totalBlocks={blocks.length}
+                        totalBlocks={(pageTemplate ? outletBlocks : blocks).length}
                         isDragging={draggedBlockIndex === idx}
                         isDragOver={dragOverBlockIndex === idx && draggedBlockIndex !== null && draggedBlockIndex !== idx}
                         onDragStart={() => setDraggedBlockIndex(idx)}
