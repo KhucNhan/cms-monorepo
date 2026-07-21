@@ -19,17 +19,18 @@ Router **layout route** (`App.tsx`, wraps every route under `ProtectedRoute`) th
   controlled inputs, e.g. `SearchInput`).
 - `LoginPage`/`GoogleCallbackPage` stay **outside** `AppShell` (no Sidebar/TopNav) — they sit as
   siblings in `App.tsx`, not children of the `AppShell` layout route.
-- **`AppLayoutContext.tsx` dùng 2 context tách biệt, KHÔNG gộp `{header, setHeader}` vào 1 object.**
-  Đây là bài học từ 1 bug infinite-loop thật đã xảy ra: khi gộp chung, mọi page gọi
-  `useAppLayoutHeader()` đều gián tiếp `useContext` trên object đó — object bị tạo mới mỗi lần
-  Provider re-render, nên React ép TẤT CẢ consumer re-render mỗi khi `setHeader()` chạy, kể cả
-  chính page vừa gọi nó → page re-render → `useLayoutEffect` (không dependency) chạy lại →
-  gọi lại `setHeader()` → lặp vô hạn ("Maximum update depth exceeded"). Việc tách `TopNavConnected`
-  khỏi `AppShellInner` (mục trước) là ĐÚNG nhưng KHÔNG ĐỦ để chặn bug này — nguyên nhân thật nằm ở
-  chỗ page tự subscribe context qua hook, không liên quan gì đến cây `<Outlet/>`. Fix: tách
-  `HeaderValueContext` (chỉ `TopNavConnected` đọc) và `SetHeaderContext` (chỉ truyền hàm setState,
-  identity ổn định vĩnh viễn theo React — page dùng context này để gọi `setHeader`, không bao giờ
-  bị ép re-render vì nó không đổi).
+- **`AppLayoutContext.tsx` uses 2 separate contexts — do NOT merge `{header, setHeader}` into one
+  object.** This is a lesson from a real infinite-loop bug: when merged, every page calling
+  `useAppLayoutHeader()` indirectly `useContext`s that object — the object gets recreated on every
+  Provider re-render, so React forces ALL consumers to re-render whenever `setHeader()` runs,
+  including the very page that just called it → page re-renders → its dependency-less
+  `useLayoutEffect` runs again → calls `setHeader()` again → infinite loop ("Maximum update depth
+  exceeded"). Splitting `TopNavConnected` out of `AppShellInner` (previous section) was CORRECT but
+  NOT SUFFICIENT to prevent this bug — the real cause is a page subscribing to context via the
+  hook, unrelated to the `<Outlet/>` tree. Fix: split into `HeaderValueContext` (only
+  `TopNavConnected` reads it) and `SetHeaderContext` (only carries the setState function, whose
+  identity is permanently stable per React — pages use this context to call `setHeader` and are
+  never forced to re-render since it never changes).
 
 ## 1. Mandatory rules
 
@@ -45,16 +46,17 @@ Router **layout route** (`App.tsx`, wraps every route under `ProtectedRoute`) th
 **Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
 `Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
 
-## 1.1 Editor component — lấy từ subpath riêng
+## 1.1 Editor component — imported from a dedicated subpath
 
-`BlockDataForm.tsx` lấy Editor component qua `getBlockEditor(type)` từ
-`@cms/block-registry/editors` (subpath riêng, KHÔNG phải `@cms/block-registry` gốc).
-`getBlockDefinition(type)` (từ package gốc) chỉ còn dùng để lấy metadata/validate type, không
-còn field `.Editor`. Lý do tách + checklist khi thêm block mới: `packages/block-registry/AGENTS.md`.
+`BlockDataForm.tsx` gets the Editor component via `getBlockEditor(type)` from
+`@cms/block-registry/editors` (a dedicated subpath, NOT the root `@cms/block-registry`).
+`getBlockDefinition(type)` (from the root package) is now only used for metadata/type validation —
+it no longer has an `.Editor` field. Rationale for the split + checklist for adding a new block:
+`packages/block-registry/AGENTS.md`.
 
-⚠️ Nếu thêm token màu/spacing/font mới trong `Editor.tsx` (dùng chung với `apps/web`), phải đồng
-bộ thủ công sang `apps/web/tailwind.config.js` — token thiếu sẽ render mất màu/mất hover một cách
-âm thầm, không báo lỗi. Xem `packages/block-registry/AGENTS.md`.
+⚠️ If you add a new color/spacing/font token in `Editor.tsx` (shared with `apps/web`), you must
+manually sync it to `apps/web/tailwind.config.js` — a missing token silently renders with no
+color/no hover, no error thrown. See `packages/block-registry/AGENTS.md`.
 
 ## 2. Sidebar (`components/layout/Sidebar.tsx`, state in `useSidebarStore`)
 
@@ -124,17 +126,17 @@ state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as
   pre-selects + **locks** the template `<select>` when present — prevents creating a page under
   the wrong tab (e.g. creating a "Blog" page while viewing `Pages`, which would silently vanish
   from the current list since it now filters by `templateId`).
-- **Cache layer** (`usePages.ts`, module-level `Map`, không phải TanStack Query — app này chưa
-  dùng lib đó, xem root AGENTS.md mục 5): key = `JSON.stringify(filters)`, tách theo từng
-  `templateId`. Chuyển qua lại giữa các tab đã xem trước đó → hiện ngay lập tức, không loading,
-  tránh nháy trắng bảng. Revalidate ngầm phía sau (stale-while-revalidate đơn giản).
-- **Bắt buộc gọi `invalidatePagesCache()`** (export từ `usePages.ts`) sau MỌI thao tác làm thay
-  đổi dữ liệu hiển thị trên bảng Content Management mà không đi qua chính `usePages` instance
-  đang mở (vì cache là module-level, sống ngoài vòng đời component): tạo page mới
-  (`CreatePageModal`), publish / Set as Draft / delete version / discard draft
-  (`PageEditPage.tsx`). Quên bước này → bảng hiện data cũ (stale) khi quay lại tab, cho tới khi
-  cache tự hết hạn — mà cache này KHÔNG có TTL, nên sẽ stale vĩnh viễn cho tới lần
-  `invalidatePagesCache()` tiếp theo hoặc reload trang.
+- **Cache layer** (`usePages.ts`, a module-level `Map`, not TanStack Query — this app doesn't use
+  that lib, see root AGENTS.md Section 5): key = `JSON.stringify(filters)`, split per `templateId`.
+  Switching back to a previously-viewed tab → shows instantly, no loading state, avoiding a table
+  flash. Revalidates in the background (simple stale-while-revalidate).
+- **Must call `invalidatePagesCache()`** (exported from `usePages.ts`) after ANY action that
+  changes data shown in the Content Management table without going through the currently-open
+  `usePages` instance itself (since the cache is module-level, outliving component lifecycle):
+  creating a page (`CreatePageModal`), publish / Set as Draft / delete version / discard draft
+  (`PageEditPage.tsx`). Skipping this → the table shows stale data when returning to the tab, and
+  stays stale forever since this cache has NO TTL — until the next `invalidatePagesCache()` call
+  or a page reload.
 
 ## 6. Page Sections (blocks) card
 

@@ -2,14 +2,8 @@
   "extends": "@cms/tsconfig/nestjs.json",
   "compilerOptions": {
     "outDir": "./dist",
+    "rootDir": "./src"
   },
-  "include": [
-    "src/**/*",
-    "prisma/**/*.ts",
-    "scripts/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma"]
 }
