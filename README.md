@@ -4,20 +4,20 @@
 
 ---
 
-## Tổng quan kiến trúc
+## Architecture overview
 
-Hệ thống gồm ba app chạy độc lập, chia sẻ logic qua các package dùng chung:
+The system has three independently-running apps that share logic through common packages:
 
 ```
 cms-monorepo/
 ├── apps/
 │   ├── admin-api/       # NestJS — Content API + Auth
-│   ├── admin-web/       # React + Vite — giao diện quản trị
+│   ├── admin-web/       # React + Vite — admin UI
 │   └── web/             # Next.js App Router — public site
 └── packages/
-    ├── block-registry/  # ⭐ nguồn sự thật duy nhất cho mọi block
+    ├── block-registry/  # ⭐ single source of truth for every block
     ├── shared-types/    # Page, User, Media, API envelope...
-    └── tsconfig/        # base tsconfig dùng chung
+    └── tsconfig/        # shared base tsconfig
 ```
 
 ```mermaid
@@ -37,11 +37,23 @@ flowchart LR
     AdminAPI  -->|revalidateTag webhook| Web
 ```
 
-Nguyên tắc cốt lõi: **`block-registry` là nguồn sự thật duy nhất**. `schema.ts` của mỗi block là pure TypeScript/Zod — không phụ thuộc React — nên cả ba app đều import được. Thêm block mới = tạo một thư mục, không sửa code rải rác ở nhiều nơi.
+Core principle: **`block-registry` is the single source of truth**. Each block's `schema.ts` is
+pure TypeScript/Zod — no React dependency — so all three apps can import it. Adding a new block
+means creating one folder, not scattering edits across the codebase.
+
+> **For contributors and coding agents:** development conventions, invariants, and known gotchas
+> live in `AGENTS.md` files, not here — start with the root [`AGENTS.md`](./AGENTS.md), then the
+> per-app file for whichever app you're touching:
+> [`apps/admin-api/AGENTS.md`](./apps/admin-api/AGENTS.md),
+> [`apps/admin-web/AGENTS.md`](./apps/admin-web/AGENTS.md),
+> [`apps/web/AGENTS.md`](./apps/web/AGENTS.md),
+> [`packages/block-registry/AGENTS.md`](./packages/block-registry/AGENTS.md). Read those before
+> making non-trivial changes — most bugs come from violating an invariant documented there, not
+> from logic errors.
 
 ---
 
-## Yêu cầu
+## Requirements
 
 | Tool       | Version  |
 |------------|----------|
@@ -51,29 +63,29 @@ Nguyên tắc cốt lõi: **`block-registry` là nguồn sự thật duy nhất*
 
 ---
 
-## Bước 1 — Cài PostgreSQL
+## Step 1 — Install PostgreSQL
 
-Chọn **một** trong ba cách:
+Pick **one** of the three options:
 
-### Cách A — Neon (cloud, không cài gì — khuyến nghị)
+### Option A — Neon (cloud, nothing to install — recommended)
 
-1. Vào https://neon.tech → đăng ký miễn phí
-2. Tạo project → copy **Connection string**:
+1. Go to https://neon.tech → sign up for free
+2. Create a project → copy the **connection string**:
    ```
    postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
    ```
-3. Dán vào `DATABASE_URL` trong file `.env`
+3. Paste it into `DATABASE_URL` in your `.env` file
 
-### Cách B — PostgreSQL local trên Windows (winget)
+### Option B — Local PostgreSQL on Windows (winget)
 
 ```powershell
-# Cài PostgreSQL 16
+# Install PostgreSQL 16
 winget install PostgreSQL.PostgreSQL.16
 
-# Thêm vào PATH nếu chưa tự động
+# Add to PATH if not done automatically
 $env:Path += ";C:\Program Files\PostgreSQL\16\bin"
 
-# Tạo user và database
+# Create the user and database
 psql -U postgres -c "CREATE USER cms_user WITH PASSWORD 'cms_pass';"
 psql -U postgres -c "CREATE DATABASE cms_db OWNER cms_user;"
 ```
@@ -83,11 +95,11 @@ psql -U postgres -c "CREATE DATABASE cms_db OWNER cms_user;"
 postgresql://cms_user:cms_pass@localhost:5432/cms_db?schema=public
 ```
 
-### Cách C — Laragon (GUI, dễ nhất trên Windows)
+### Option C — Laragon (GUI, easiest on Windows)
 
-1. Tải Laragon Full tại https://laragon.org/download
-2. Start All → PostgreSQL chạy ở cổng 5432 (user: `root`, pass: rỗng)
-3. Menu Laragon → Database → HeidiSQL → tạo database `cms_db`
+1. Download Laragon Full at https://laragon.org/download
+2. Start All → PostgreSQL runs on port 5432 (user: `root`, password: empty)
+3. Laragon menu → Database → HeidiSQL → create a `cms_db` database
 
 `DATABASE_URL`:
 ```
@@ -96,7 +108,7 @@ postgresql://root:@localhost:5432/cms_db?schema=public
 
 ---
 
-## Bước 2 — Clone & cài dependencies
+## Step 2 — Clone & install dependencies
 
 ```powershell
 git clone <repo-url> cms-monorepo
@@ -106,44 +118,55 @@ pnpm install
 
 ---
 
-## Bước 3 — Tạo file `.env`
+## Step 3 — Create the `.env` file
 
 ```powershell
 Copy-Item .env.example apps\admin-api\.env
 ```
 
-Mở `apps\admin-api\.env`, điền `DATABASE_URL` từ Bước 1, sau đó đổi hai JWT secret thành chuỗi ngẫu nhiên (≥ 32 ký tự):
+Open `apps\admin-api\.env`, fill in `DATABASE_URL` from Step 1, then replace both JWT secrets with
+random strings (≥ 32 characters):
 
 ```powershell
-# Tạo secret ngẫu nhiên
+# Generate a random secret
 [System.Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
+```
+
+For Google OAuth login (optional — see `apps/admin-api/AGENTS.md` Section 10 for the full flow),
+also set:
+
+```dotenv
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=http://localhost:3001/api/v1/auth/google/callback
+FRONTEND_URL=http://localhost:5173
 ```
 
 ---
 
-## Bước 4 — Migrate & Seed
+## Step 4 — Migrate & seed
 
 ```powershell
-# Tạo Prisma Client từ schema
+# Generate the Prisma Client from the schema
 pnpm db:generate
 
-# Tạo bảng trong database
+# Create tables in the database
 pnpm db:migrate
 
-# Tạo roles, permissions, admin user và homepage mẫu
+# Create roles, permissions, an admin user, and a sample homepage
 pnpm db:seed
 ```
 
-Output khi seed thành công:
+Expected output on a successful seed:
 
 ```
 🌱 Seeding database...
 
 📋 Creating permissions...
-   ✓ 12 permissions ready
+   ✓ 16 permissions ready
 
 👥 Creating roles...
-   ✓ admin: 12 permissions
+   ✓ admin: 16 permissions
    ✓ editor: 5 permissions
    ✓ viewer: 2 permissions
 
@@ -158,19 +181,19 @@ Output khi seed thành công:
 
 ---
 
-## Bước 5 — Chạy toàn bộ hệ thống
+## Step 5 — Run everything
 
 ```powershell
-# Chạy cả ba app cùng lúc
+# Run all three apps at once
 pnpm dev
 ```
 
-Hoặc chạy từng app riêng:
+Or run each app individually:
 
 ```powershell
-pnpm --filter admin-api dev    # NestJS      → http://localhost:3001
+pnpm --filter admin-api dev        # NestJS      → http://localhost:3001
 pnpm --filter @cms/admin-web dev   # React/Vite  → http://localhost:5173
-pnpm --filter @cms/web dev     # Next.js     → http://localhost:3000
+pnpm --filter @cms/web dev         # Next.js     → http://localhost:3000
 ```
 
 | Service       | URL                               |
@@ -182,32 +205,33 @@ pnpm --filter @cms/web dev     # Next.js     → http://localhost:3000
 
 ---
 
-## Kiểm tra nhanh (PowerShell)
+## Quick check (PowerShell)
 
 ```powershell
-# 1. Login — lấy access token
+# 1. Login — get an access token
 $response = Invoke-RestMethod -Uri "http://localhost:3001/api/v1/auth/login" `
   -Method POST -ContentType "application/json" `
   -Body '{"email":"admin@example.com","password":"Admin@123456"}'
 
 $token = $response.data.accessToken
 
-# 2. Danh sách pages
+# 2. List pages
 Invoke-RestMethod -Uri "http://localhost:3001/api/v1/pages" `
   -Headers @{ Authorization = "Bearer $token" }
 
-# 3. Chi tiết homepage (kèm blocks)
+# 3. Homepage detail (with blocks)
 Invoke-RestMethod -Uri "http://localhost:3001/api/v1/pages/homepage" `
   -Headers @{ Authorization = "Bearer $token" }
 
-# 4. Tạo page mới
+# 4. Create a new page
 Invoke-RestMethod -Uri "http://localhost:3001/api/v1/pages" `
   -Method POST `
   -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
   -Body '{"slug":"about-us","seoMeta":{"title":"About Us"}}'
 ```
 
-Hoặc dùng **Swagger UI** tại http://localhost:3001/api/docs — click "Authorize", nhập `Bearer <token>`.
+Or use **Swagger UI** at http://localhost:3001/api/docs — click "Authorize" and enter
+`Bearer <token>`.
 
 ---
 
@@ -223,11 +247,17 @@ Pages >─────┘ (published_version_id)
 Media (standalone)
 ```
 
-### Tại sao tách `pages` / `page_versions` / `blocks`
+### Why `pages` / `page_versions` / `blocks` are separate tables
 
-**Page versioning** cho phép editor làm việc trên bản DRAFT trong khi bản PUBLISHED vẫn chạy thật trên site. "Publish" chỉ là cập nhật con trỏ `pages.published_version_id` — không ghi đè dữ liệu đang live, rollback bất cứ lúc nào bằng cách đổi con trỏ.
+**Page versioning** lets an editor work on a DRAFT while the PUBLISHED version keeps serving the
+live site. "Publish" is just updating the `pages.published_version_id` pointer — it never
+overwrites live data, and you can roll back at any time by repointing it.
 
-**Blocks là bảng riêng** (không phải JSONB array trong page) để reorder an toàn không cần viết lại toàn bộ, query theo `type` được, và tránh row phình to vô hạn. Trường `data: jsonb` của từng block vẫn là JSON vì mỗi block type có shape khác nhau — schema validation diễn ra ở application layer bằng Zod (từ `block-registry`), không lặp lại ở tầng database.
+**Blocks are their own table** (not a JSONB array on the page) so that reordering is cheap and
+safe without rewriting the whole row, blocks can be queried by `type`, and the page row doesn't
+grow unbounded. Each block's `data: jsonb` column stays JSON because every block type has a
+different shape — schema validation happens at the application layer via Zod (from
+`block-registry`), not duplicated at the database layer.
 
 ---
 
@@ -235,128 +265,157 @@ Media (standalone)
 
 ### Auth
 
-| Method | Path                       | Mô tả                                    |
-|--------|----------------------------|------------------------------------------|
-| POST   | `/api/v1/auth/login`       | Đăng nhập → `accessToken` + refresh cookie |
-| POST   | `/api/v1/auth/refresh`     | Dùng cookie → access token mới           |
-| POST   | `/api/v1/auth/logout`      | Revoke refresh token                     |
-| GET    | `/api/v1/auth/me`          | Thông tin user hiện tại                  |
+| Method | Path                          | Description                                    |
+|--------|-------------------------------|-------------------------------------------------|
+| POST   | `/api/v1/auth/login`          | Log in → `accessToken` + refresh cookie          |
+| POST   | `/api/v1/auth/refresh`        | Use the cookie → new access token                |
+| POST   | `/api/v1/auth/logout`         | Revoke the refresh token                         |
+| GET    | `/api/v1/auth/me`             | Current user info                                |
+| GET    | `/api/v1/auth/google`         | Start Google OAuth login (redirects to Google)   |
+| GET    | `/api/v1/auth/google/callback`| Google OAuth callback (existing users only)      |
 
 ### Pages
 
 | Method | Path                                                | Permission      |
 |--------|-----------------------------------------------------|-----------------|
-| GET    | `/api/v1/pages`                                     | authenticated   |
-| GET    | `/api/v1/pages/:idOrSlug`                           | authenticated   |
+| GET    | `/api/v1/pages`                                     | `page:read`     |
+| GET    | `/api/v1/pages/:idOrSlug`                           | `page:read`     |
 | POST   | `/api/v1/pages`                                     | `page:create`   |
 | PATCH  | `/api/v1/pages/:id`                                 | `page:update`   |
 | DELETE | `/api/v1/pages/:id`                                 | `page:delete`   |
-| POST   | `/api/v1/pages/:pageId/versions/:versionId/publish` | `page:publish`  |
-| POST   | `/api/v1/pages/:pageId/versions/:versionId/draft`   | `page:update`   |
+| POST   | `/api/v1/pages/:id/draft`                           | `page:update`   |
+| POST   | `/api/v1/page-versions/:id/publish`                 | `page:publish`  |
+| POST   | `/api/v1/page-versions/:id/revert`                  | `page:update`   |
+| PATCH  | `/api/v1/page-versions/:id/seo-meta`                | `page:update`   |
 
-### Blocks (nested dưới page-version)
+### Blocks (nested under a page version)
 
 | Method | Path                                                    | Permission    |
-|--------|---------------------------------------------------------|---------------|
-| GET    | `/api/v1/page-versions/:versionId/blocks`               | authenticated |
-| POST   | `/api/v1/page-versions/:versionId/blocks`               | `page:update` |
-| PATCH  | `/api/v1/page-versions/:versionId/blocks/reorder`       | `page:update` |
-| PATCH  | `/api/v1/page-versions/:versionId/blocks/:blockId`      | `page:update` |
-| DELETE | `/api/v1/page-versions/:versionId/blocks/:blockId`      | `page:update` |
+|--------|----------------------------------------------------------|---------------|
+| GET    | `/api/v1/blocks`                                         | `page:read`   |
+| POST   | `/api/v1/page-versions/:versionId/blocks`                | `page:update` |
+| PATCH  | `/api/v1/page-versions/:versionId/blocks/reorder`        | `page:update` |
+| PATCH  | `/api/v1/page-versions/:versionId/blocks/:blockId`       | `page:update` |
+| DELETE | `/api/v1/page-versions/:versionId/blocks/:blockId`       | `page:update` |
 
-### Users
+### Users & Roles
 
-| Method | Path               | Permission    |
-|--------|--------------------|---------------|
-| GET    | `/api/v1/users`    | `user:read`   |
-| GET    | `/api/v1/users/:id`| `user:read`   |
-| POST   | `/api/v1/users`    | `user:create` |
+| Method | Path                          | Permission    |
+|--------|-------------------------------|---------------|
+| GET    | `/api/v1/users`               | `user:read`   |
+| GET    | `/api/v1/users/:id`           | `user:read`   |
+| POST   | `/api/v1/users`               | `user:create` |
+| GET    | `/api/v1/roles`                | `role:read`   |
+| GET    | `/api/v1/roles/permissions/list` | `role:read` |
+| POST   | `/api/v1/roles`                | `role:create` |
+| PATCH  | `/api/v1/roles/:id`            | `role:update` |
+| PATCH  | `/api/v1/roles/:id/permissions`| `role:update` |
+| DELETE | `/api/v1/roles/:id`            | `role:delete` |
+
+Every route (including `GET`) requires a permission — the only exceptions are the public
+`public-pages.controller.ts` endpoints (consumed by `apps/web`) and the two Google OAuth routes.
+Full details: `apps/admin-api/AGENTS.md`, Section 5.
 
 ---
 
 ## Block Registry
 
-`packages/block-registry` là trung tâm của toàn hệ thống. Mỗi block có cấu trúc:
+`packages/block-registry` is the center of the whole system. As of 2026-07, each block's Editor
+component lives in a separate entry point from its schema/metadata:
 
 ```
-packages/block-registry/src/blocks/
-└── hero/
-    ├── schema.ts      # Zod schema — pure TS, NestJS import được
-    ├── editor.tsx     # React form cho admin-web
-    ├── renderer.tsx   # React component cho Next.js
-    └── index.ts       # export BlockDefinition
+packages/block-registry/src/
+├── blocks/
+│   └── hero/
+│       ├── schema.ts      # Zod schema — pure TS, safe for NestJS to import
+│       ├── Editor.tsx     # React form, used by admin-web (and apps/web Live Edit Mode)
+│       ├── renderer.tsx   # React component for Next.js
+│       └── index.ts       # exports BlockDefinition (no Editor field) + Renderer
+├── registry.ts            # BlockDefinition list + getBlockDefinition(type)
+└── editors.ts             # separate entry point: getBlockEditor(type), @cms/block-registry/editors
 ```
 
-`schema.ts` không import React hay bất kỳ dependency UI nào — đây là điều kiện để NestJS dùng được package mà không kéo theo React vào backend.
+`schema.ts` never imports React or any UI dependency — that's what lets NestJS use the package
+without pulling React into the backend. The Editor component is intentionally kept out of
+`registry.ts`/`index.ts` for the same reason (`admin-api`'s build has no `--jsx`); it's imported
+only via the `@cms/block-registry/editors` subpath. See `packages/block-registry/AGENTS.md` for
+the full rationale and the block-authoring checklist.
 
-**Thêm block mới** chỉ cần:
-1. Tạo thư mục `blocks/<tên-block>/` với `schema.ts`, `editor.tsx`, `renderer.tsx`, `index.ts`
-2. Đăng ký vào `registry.ts` một dòng
+**Adding a new block** requires:
+1. Create `blocks/<block-name>/` with `schema.ts`, `Editor.tsx`, `renderer.tsx`, `index.ts`
+2. Register it in `registry.ts` (one line)
+3. Register the Editor in `editors.ts` (`blockEditors['xxx'] = XxxEditor`)
 
-Không cần sửa controller, không sửa route Next.js, không có `switch-case` rải rác theo `type`.
+No controller changes, no Next.js route changes, no scattered `switch`/`case` on `type`.
 
 ---
 
-## Cấu trúc thư mục chi tiết
+## Detailed directory structure
 
 ### admin-api (NestJS)
 
 ```
 src/
 ├── modules/
-│   ├── auth/          # JWT strategy, guards, refresh token rotation
-│   ├── pages/         # CRUD pages + publish/draft workflow
-│   ├── blocks/        # CRUD blocks + Zod validation từ block-registry
-│   └── users/         # CRUD users
+│   ├── auth/          # JWT strategy, guards, refresh token rotation, Google OAuth
+│   ├── pages/          # Page CRUD, title, template filtering
+│   ├── page-versions/  # DRAFT/PUBLISHED/ARCHIVED lifecycle, publish, revert
+│   ├── blocks/         # Block CRUD + Zod validation from block-registry
+│   ├── media/           # Upload, sharp-based optimization (3 WebP variants), usage scan
+│   ├── roles/           # RBAC: roles, permissions, role-permission assignment
+│   └── users/           # User CRUD
 ├── common/
-│   ├── filters/       # HTTP exception filter — response envelope chuẩn
-│   ├── interceptors/  # Response interceptor
-│   └── pipes/         # ZodValidationPipe
-└── prisma/            # PrismaService
+│   ├── filters/        # HTTP exception filter — standard response envelope
+│   ├── interceptors/   # Response interceptor
+│   └── pipes/           # ZodValidationPipe
+└── prisma/              # PrismaService
 ```
 
 ### admin-web (React + Vite)
 
 ```
 src/
-├── api/               # typed fetch wrappers (auth, pages, blocks, page-versions)
-├── components/        # UI components + layout (AppLayout, Sidebar, TopNav)
-├── context/           # AuthContext
-├── hooks/             # useAuth, usePages, useContentEntries
+├── api/               # typed fetch wrappers (auth, pages, blocks, page-versions, media, roles)
+├── components/        # UI components + layout (AppShell, Sidebar, TopNav)
+├── context/           # AuthContext, AppLayoutContext
+├── hooks/             # useAuth, usePages, useMedia, useUsers, useRoles, usePermissions
 └── pages/
-    ├── auth/          # LoginPage
-    └── content-management/
-        ├── ContentManagerPage.tsx    # danh sách page
-        ├── PageEditPage.tsx          # page editor chính
-        ├── BlockPickerModal.tsx      # chọn block từ registry
-        └── components/
-            ├── block-editors/        # HeroBlockEditor, FaqBlockEditor, RichTextBlockEditor...
-            ├── BlockSectionCard.tsx
-            └── CreatePageModal.tsx
+    ├── auth/                    # LoginPage, GoogleCallbackPage
+    ├── content-management/
+    │   ├── ContentManagementPage.tsx  # page list, filtered by template
+    │   ├── PageEditPage.tsx           # main page editor + Live Edit Mode
+    │   ├── BlockPickerModal.tsx       # pick a block from the registry
+    │   └── components/
+    │       ├── BlockDataForm.tsx      # resolves the Editor via getBlockEditor(type)
+    │       ├── BlockSectionCard.tsx
+    │       └── CreatePageModal.tsx
+    ├── roles/                   # RolesPage — role list + permission matrix
+    └── media/                   # MediaLibraryPage
 ```
 
 ### web (Next.js)
 
 ```
 app/
-├── [slug]/page.tsx      # catch-all cho mọi page động
-├── api/revalidate/      # webhook revalidateTag khi admin publish
+├── [slug]/page.tsx      # catch-all for every dynamic page
+├── api/revalidate/      # revalidateTag webhook, fired when admin-api publishes
 └── layout.tsx
 components/
-└── blocks/              # HeroBlock, FaqBlock, RichTextBlock...
+├── blocks/               # renderer wrappers, read from the block registry
+└── edit-mode/             # AdminNavbar, EditModeLayout — Live Edit Mode overlay for admins
 lib/
-└── pages.ts             # fetch page theo slug, typed
+└── pages.ts               # typed fetch for a page by slug
 ```
 
 ---
 
-## Scripts database
+## Database scripts
 
 ```powershell
-pnpm db:generate   # tạo Prisma Client từ schema
-pnpm db:migrate    # tạo/migrate bảng trong database
-pnpm db:seed       # seed roles, permissions, admin user, homepage mẫu
-pnpm db:studio     # mở Prisma Studio tại http://localhost:5555
+pnpm db:generate   # generate the Prisma Client from the schema
+pnpm db:migrate    # create/migrate database tables
+pnpm db:seed       # seed roles, permissions, admin user, sample homepage
+pnpm db:studio     # open Prisma Studio at http://localhost:5555
 ```
 
 ---
@@ -366,26 +425,29 @@ pnpm db:studio     # mở Prisma Studio tại http://localhost:5555
 ### "Can't reach database server"
 
 ```powershell
-# Kiểm tra PostgreSQL service (Windows)
+# Check the PostgreSQL service (Windows)
 Get-Service -Name postgresql*
 
-# Kiểm tra port
+# Check the port
 Test-NetConnection -ComputerName localhost -Port 5432
 ```
 
-### "P1001: Can't reach database" với Neon
+### "P1001: Can't reach database" with Neon
 
-Thêm `?sslmode=require` vào cuối connection string.
+Add `?sslmode=require` to the end of the connection string.
 
 ### "password authentication failed"
 
 ```powershell
-psql -U postgres -c "\du"   # liệt kê users và roles
+psql -U postgres -c "\du"   # list users and roles
 ```
 
-### Reset database hoàn toàn
+### Full database reset
 
 ```powershell
 pnpm --filter admin-api prisma migrate reset
-# Xác nhận → xoá hết data → chạy lại migrations → seed tự động
+# Confirm → wipes all data → reruns migrations → auto-seeds
 ```
+
+For deeper troubleshooting (Prisma migration drift, CORS, Google OAuth, module-not-found after
+`git pull`, etc.), see `apps/admin-api/AGENTS.md`, Section 7.
