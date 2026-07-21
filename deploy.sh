@@ -54,6 +54,8 @@ pnpm --filter admin-api build
 (
   cd apps/admin-api
   env $(grep -v '^#' .env | xargs) pnpm exec prisma migrate deploy
+  echo "==> Re-seeding permissions/roles (idempotent upsert, safe to re-run)"
+  env $(grep -v '^#' .env | xargs) pnpm exec ts-node prisma/seed.ts
 )
 
 echo "==> Building admin-web and web"
