@@ -85,15 +85,25 @@ export class PageVersionsService {
       this.prisma.page.update({
         where: { id: pageId },
         data: { publishedVersionId: versionId },
+        // NEW: needed to build the correct revalidate tag for template pages
+        // (page:{slugPrefix}/{slug} vs page:{slug} for static pages).
+        include: { template: { select: { slugPrefix: true } } },
       }),
     ]);
 
-    await this.triggerRevalidate(updatedPage.slug);
+    await this.triggerRevalidate(updatedPage.slug, updatedPage.template?.slugPrefix ?? null);
 
     return { page: updatedPage, version: updatedVersion };
   }
 
-  private async triggerRevalidate(slug: string): Promise<void> {
+  /**
+   * Builds the revalidate tag the same way apps/web's getPageBySegments()
+   * builds its cache tag: `page:{slug}` for static pages (no template),
+   * `page:{slugPrefix}/{slug}` for template-bound pages. Keeping these two
+   * in sync is critical — a mismatch means publishing never invalidates
+   * the right Next.js cache entry (stale content served indefinitely).
+   */
+  private async triggerRevalidate(slug: string, slugPrefix: string | null): Promise<void> {
     const webUrl = process.env.WEB_URL;
     const secret = process.env.REVALIDATE_SECRET;
 
@@ -102,6 +112,8 @@ export class PageVersionsService {
       return;
     }
 
+    const pageTag = slugPrefix ? `page:${slugPrefix}/${slug}` : `page:${slug}`;
+
     try {
       const res = await fetch(`${webUrl}/api/revalidate`, {
         method: 'POST',
@@ -109,7 +121,7 @@ export class PageVersionsService {
           'Content-Type': 'application/json',
           'x-revalidate-secret': secret,
         },
-        body: JSON.stringify({ tags: [`page:${slug}`, 'published-pages'] }),
+        body: JSON.stringify({ tags: [pageTag, 'published-pages'] }),
       });
 
       if (!res.ok) {

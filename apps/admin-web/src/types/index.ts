@@ -45,15 +45,17 @@ export interface TemplatePlaceholder {
   templateId: string;
   type: string;
   orderIndex: number;
+  autoFillMap: Record<string, string> | null;
+  updatedAt: string;
 }
 
 export interface Template {
   id: string;
   name: string;
-  contentType: TemplateContentType;
+  slugPrefix: string; // server-generated, immutable — replaces contentType
   createdAt: string;
   updatedAt: string;
-  placeholders?: TemplatePlaceholder[];
+  placeholders: TemplatePlaceholder[];
 }
 
 export interface Block {
@@ -142,6 +144,7 @@ export interface PageFilters {
   page?: number;
   pageSize?: number;
   search?: string;
+  templateId?: string;
 }
 
 // ─── Media ───────────────────────────────────────────────────────────────────

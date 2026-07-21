@@ -2,6 +2,18 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
+import { getBlockDefinition } from '@cms/block-registry';
+import { resolveAutoFill } from './template-autofill.util';
+
+// Marker-only placeholder types are NEVER cloned into real Page.Block rows.
+// They exist purely to mark structural positions in a Template layout
+// (content-outlet = "page's own free blocks go here", next-project =
+// "next-project link goes here") — both are resolved dynamically at
+// read-time (mergeTemplateWithPage / resolveNextProject), never persisted
+// as an editable Block belonging to the page. Cloning them creates a
+// meaningless "content-outlet Block with empty JSON data" card in Content
+// Management — this was the bug.
+const MARKER_ONLY_PLACEHOLDER_TYPES = new Set(['content-outlet', 'next-project']);
 
 // ── Input schemas ─────────────────────────────────────────
 
@@ -30,6 +42,11 @@ export const listPagesSchema = z.object({
   page:     z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search:   z.string().optional(),
+  // ── New: filter pages by template ──
+  // - templateId provided  → only pages belonging to that template
+  // - templateId omitted   → only STATIC pages (templateId = null)
+  //   (matches Sidebar's "Pages" nav item, which must exclude template pages)
+  templateId: z.string().uuid().optional(),
 });
 
 export type CreatePageDto = z.infer<typeof createPageSchema>;
@@ -39,13 +56,18 @@ export type UpdatePageDto = z.infer<typeof updatePageSchema>;
 export class PagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(params: { page: number; pageSize: number; search?: string }) {
-    const { page, pageSize, search } = params;
+  async findAll(params: { page: number; pageSize: number; search?: string; templateId?: string }) {
+    const { page, pageSize, search, templateId } = params;
     const skip = (page - 1) * pageSize;
     const trimmedSearch = search?.trim();
-    const where = trimmedSearch
-      ? { slug: { contains: trimmedSearch, mode: 'insensitive' as const } }
-      : {};
+
+    const where = {
+      // No templateId in query → static pages only (templateId IS NULL)
+      templateId: templateId ?? null,
+      ...(trimmedSearch
+        ? { slug: { contains: trimmedSearch, mode: 'insensitive' as const } }
+        : {}),
+    };
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.page.findMany({
@@ -89,36 +111,94 @@ export class PagesService {
   }
 
   async create(dto: CreatePageDto, createdBy: string) {
-    const existing = await this.prisma.page.findUnique({ where: { slug: dto.slug } });
+    const existing = dto.templateId
+      ? await this.prisma.page.findUnique({
+          where: { page_template_slug_unique: { templateId: dto.templateId, slug: dto.slug } },
+        })
+      : await this.prisma.page.findFirst({
+          where: { slug: dto.slug, templateId: null },
+        });
+
     if (existing) {
       throw new ConflictException({ code: ErrorCode.CONFLICT, message: `Slug already exists: ${dto.slug}` });
     }
 
+    let placeholders: Awaited<ReturnType<typeof this.prisma.templatePlaceholder.findMany>> = [];
     if (dto.templateId) {
-      const templateExists = await this.prisma.template.findUnique({ where: { id: dto.templateId } });
-      if (!templateExists) {
+      const template = await this.prisma.template.findUnique({ where: { id: dto.templateId } });
+      if (!template) {
         throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: `Template not found: ${dto.templateId}` });
       }
+      placeholders = await this.prisma.templatePlaceholder.findMany({
+        where: { templateId: dto.templateId },
+        orderBy: { orderIndex: 'asc' },
+      });
     }
 
-    return this.prisma.page.create({
-      data: {
-        slug: dto.slug,
-        title: dto.title ?? '',
-        templateId: dto.templateId ?? null,
-        versions: {
-          create: {
-            status: 'DRAFT',
-            seoMeta: dto.seoMeta ?? {},
-            createdBy,
+    // $transaction (interactive) instead of the previous nested `page.create`,
+    // because Phase C needs the DRAFT version's id to attach auto-filled
+    // Block rows — a single nested create can't give us that id mid-write.
+    return this.prisma.$transaction(async (tx) => {
+      try {
+        const page = await tx.page.create({
+        data: {
+          slug: dto.slug,
+          title: dto.title ?? '',
+          templateId: dto.templateId ?? null,
+          versions: {
+            create: { status: 'DRAFT', seoMeta: dto.seoMeta ?? {}, createdBy },
           },
         },
-      },
-      include: {
-        publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
-        _count: { select: { versions: true } },
-        versions: { orderBy: { createdAt: 'desc' }, take: 1 },
-      },
+        include: { versions: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      });
+
+      const draft = page.versions[0];
+      if (!draft) {
+        // Unreachable — nested create always produces exactly one DRAFT version.
+        throw new Error('Expected a DRAFT version to be created alongside the page');
+      }
+
+      const MARKER_ONLY_PLACEHOLDER_TYPES = new Set(['content-outlet', 'next-project']);
+
+      for (const placeholder of placeholders) {
+        if (MARKER_ONLY_PLACEHOLDER_TYPES.has(placeholder.type)) continue;
+
+        let definition;
+        try {
+          definition = getBlockDefinition(placeholder.type);
+        } catch {
+          continue;
+        }
+
+        const filledData = resolveAutoFill(
+          definition.defaultData,
+          placeholder.autoFillMap as Record<string, string> | null,
+          page,
+        );
+        const parsed = definition.schema.parse(filledData);
+
+        await tx.block.create({
+          data: {
+            pageVersionId: draft.id, // giờ TS biết chắc draft không undefined
+            type: placeholder.type,
+            orderIndex: placeholder.orderIndex,
+            data: parsed,
+          },
+        });
+      }
+
+      return tx.page.findUniqueOrThrow({
+        where: { id: page.id },
+        include: {
+          publishedVersion: { select: { id: true, status: true, updatedAt: true, seoMeta: true } },
+          _count: { select: { versions: true } },
+          versions: { orderBy: { createdAt: 'desc' }, take: 1, include: { blocks: { orderBy: { orderIndex: 'asc' } } } },
+        },
+      });
+      } catch (error) {
+        console.error('[PagesService.create] RAW ERROR:', error);
+        throw error;
+      }
     });
   }
 
@@ -127,15 +207,22 @@ export class PagesService {
     if (!page) throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: 'Page not found' });
 
     if (dto.slug && dto.slug !== page.slug) {
-      const conflict = await this.prisma.page.findUnique({ where: { slug: dto.slug } });
+      // Use page.templateId (from the fetched row), NOT dto.templateId —
+      // updatePageSchema has no templateId field: a page's template binding
+      // is immutable after creation, only slug/title can be patched here.
+      const conflict = page.templateId
+        ? await this.prisma.page.findUnique({
+            where: { page_template_slug_unique: { templateId: page.templateId, slug: dto.slug } },
+          })
+        : await this.prisma.page.findFirst({
+            where: { slug: dto.slug, templateId: null },
+          });
+
       if (conflict) {
         throw new ConflictException({ code: ErrorCode.CONFLICT, message: `Slug already exists: ${dto.slug}` });
       }
     }
 
-    // title là thuộc tính của Page (không versioned), có thể update trực tiếp bất kể
-    // trạng thái DRAFT/PUBLISHED của version hiện tại — khác với slug (cũng ở Page nhưng
-    // theo quy ước hiện tại lưu trực tiếp) và seoMeta (thuộc PageVersion, phải qua draft).
     return this.prisma.page.update({
       where: { id },
       data: {

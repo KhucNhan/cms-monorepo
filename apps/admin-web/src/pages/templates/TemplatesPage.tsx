@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { templatesApi, PreviewDeleteResponse } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
-import type { Template, TemplatePlaceholder, TemplateContentType } from '@/types';
+import type { Template, TemplatePlaceholder } from '@/types';
 import { getAllBlockDefinitions } from '@cms/block-registry';
 
 // Material Icons map
@@ -15,6 +15,9 @@ const ICON_MAP: Record<string, string> = {
   'rich-text': 'notes',
   faq: 'help',
   'content-outlet': 'vertical_align_center',
+  // Phase D marker — "next project" link, resolved at read-time by
+  // PublicPagesController, never stored with real data of its own.
+  'next-project': 'arrow_forward',
 };
 
 export function TemplatesPage() {
@@ -35,7 +38,6 @@ export function TemplatesPage() {
 
   // Creation State
   const [newTemplateName, setNewTemplateName] = useState('');
-  const [newTemplateType, setNewTemplateType] = useState<TemplateContentType>('BLOG');
   const [isCreating, setIsCreating] = useState(false);
 
   // Deletion state
@@ -71,6 +73,7 @@ export function TemplatesPage() {
 
   useEffect(() => {
     fetchTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectTemplate = async (template: Template) => {
@@ -90,9 +93,11 @@ export function TemplatesPage() {
     if (!newTemplateName.trim()) return;
     setIsCreating(true);
     try {
+      // contentType removed — Template no longer maps 1:1 to a fixed content
+      // type. slugPrefix is generated server-side from `name`
+      // (TemplatesService.buildSlugPrefix), never sent by the client.
       const created = await templatesApi.create({
         name: newTemplateName.trim(),
-        contentType: newTemplateType,
       });
       addToast('Template created successfully', 'success');
       setTemplates((prev) => [...prev, created]);
@@ -134,6 +139,8 @@ export function TemplatesPage() {
       templateId: selectedTemplateId!,
       type,
       orderIndex: placeholders.length,
+      autoFillMap: null,
+      updatedAt: new Date().toISOString(),
     };
     const updated = [...placeholders, newPlaceholder];
     setPlaceholders(updated);
@@ -142,7 +149,7 @@ export function TemplatesPage() {
 
   const handleRemovePlaceholderClick = async (placeholderType: string) => {
     if (placeholderType === 'content-outlet') return;
-    
+
     // Check affected pages
     setLoadingPreview(true);
     try {
@@ -217,21 +224,23 @@ export function TemplatesPage() {
     return registryBlocks.filter(
       (def) =>
         def.type !== 'content-outlet' &&
-        !placeholders.some((p) => p.type === def.type)
+        !placeholders.some((p) => p.type === def.type),
     );
   }, [placeholders]);
 
+  useAppLayoutHeader({ title: 'Templates' });
+
   return (
-    <AppLayout title="Page Templates">
+    <>
       <div className="p-xl grid grid-cols-[320px_1fr] gap-xl max-w-7xl mx-auto">
-        
+
         {/* Left Side: Templates List + Creation Form */}
         <div className="flex flex-col gap-lg bg-surface-container-lowest rounded-xl border border-outline-variant p-lg h-fit shadow-sm">
           <h3 className="text-h3 font-h3 text-on-surface">Layout Templates</h3>
-          
+
           {loading && <p className="text-body-md text-on-surface-variant">Loading templates...</p>}
           {error && <p className="text-body-md text-error">{error}</p>}
-          
+
           <div className="flex flex-col gap-xs">
             {templates.map((t) => (
               <div
@@ -245,7 +254,13 @@ export function TemplatesPage() {
               >
                 <div className="flex flex-col">
                   <span>{t.name}</span>
-                  <span className="text-[11px] text-on-surface-variant uppercase font-medium">{t.contentType}</span>
+                  {/* slugPrefix is server-generated & immutable — replaces the
+                      old contentType badge. It's the exact path segment used
+                      in the public route (/{slugPrefix}/{slug}) and in the
+                      Sidebar's dynamic nav item for this template. */}
+                  <span className="text-[11px] text-on-surface-variant uppercase font-medium">
+                    /{t.slugPrefix}
+                  </span>
                 </div>
                 {canDelete && (
                   <button
@@ -271,17 +286,9 @@ export function TemplatesPage() {
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
               />
-              <div className="flex flex-col gap-xs">
-                <label className="text-label-sm font-medium text-on-surface-variant">Content Type</label>
-                <select
-                  value={newTemplateType}
-                  onChange={(e) => setNewTemplateType(e.target.value as 'BLOG' | 'PROJECT')}
-                  className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface focus:outline-none"
-                >
-                  <option value="BLOG">BLOG</option>
-                  <option value="PROJECT">PROJECT</option>
-                </select>
-              </div>
+              {/* Content Type selector removed — Template no longer maps 1:1
+                  to a fixed content type. slugPrefix is auto-derived from the
+                  name above (e.g. "Project" -> "projects"). */}
               <Button type="submit" variant="primary" loading={isCreating} disabled={!newTemplateName.trim()}>
                 Create Template
               </Button>
@@ -297,7 +304,7 @@ export function TemplatesPage() {
                 <div>
                   <h2 className="text-h2 font-h2 text-on-surface">{selectedTemplate.name} Layout</h2>
                   <p className="text-body-sm text-on-surface-variant uppercase font-bold mt-xs">
-                    Content Type: {selectedTemplate.contentType}
+                    Public route: /{selectedTemplate.slugPrefix}/{'{slug}'}
                   </p>
                 </div>
                 {canManage && (
@@ -330,9 +337,9 @@ export function TemplatesPage() {
                         setDraggedIdx(null);
                         setDragOverIdx(null);
                       }}
-                      className={`flex items-center gap-md p-md border rounded-xl transition-all ${
-                        isOutlet 
-                          ? 'bg-secondary/5 border-secondary/30' 
+                      className={`flex items-center flex-wrap gap-md p-md border rounded-xl transition-all ${
+                        isOutlet
+                          ? 'bg-secondary/5 border-secondary/30'
                           : 'bg-surface border-outline-variant'
                       } ${isOver ? 'border-primary border-2 translate-y-1' : ''}`}
                     >
@@ -348,13 +355,20 @@ export function TemplatesPage() {
 
                       <div className="flex-1">
                         <p className={`text-body-md font-bold ${isOutlet ? 'text-secondary' : 'text-on-surface'}`}>
-                          {isOutlet ? 'Content Outlet (Slot for free-form blocks)' : p.type.toUpperCase() + ' Placeholder'}
+                          {isOutlet
+                            ? 'Content Outlet (Slot for free-form blocks)'
+                            : p.type === 'next-project'
+                              ? 'Next Project (link to next published sibling page)'
+                              : p.type.toUpperCase() + ' Placeholder'}
                         </p>
                         <p className="text-[11px] text-on-surface-variant">
-                          {isOutlet 
-                            ? 'Page contents will insert here in this position.' 
-                            : `Static placeholder. Page must supply '${p.type}' block.`
-                          }
+                          {isOutlet
+                            ? 'Page contents will insert here in this position.'
+                            : p.type === 'next-project'
+                              ? 'Marker only — resolved automatically at read-time, no data to configure.'
+                              : p.type === 'hero'
+                                ? `Static placeholder. 'title' is auto-filled from the page's title.`
+                                : `Static placeholder. Page must supply '${p.type}' block.`}
                         </p>
                       </div>
 
@@ -374,7 +388,7 @@ export function TemplatesPage() {
               </div>
 
               {/* Add Placeholder controls */}
-              {canManage && availableBlocks.length > 0 && (
+              {canManage && (availableBlocks.length > 0 || !placeholders.some((p) => p.type === 'next-project')) && (
                 <div className="border-t border-outline-variant pt-lg mt-md">
                   <h4 className="text-label-md font-bold text-on-surface uppercase mb-md">Add Layout Placeholder</h4>
                   <div className="flex flex-wrap gap-sm">
@@ -391,6 +405,21 @@ export function TemplatesPage() {
                         </button>
                       );
                     })}
+
+                    {/* next-project is a marker (not in block-registry's
+                        assignable list the same way content-outlet is
+                        excluded from availableBlocks), added via its own
+                        dedicated button — optional per template, unlike
+                        content-outlet which is mandatory. */}
+                    {!placeholders.some((p) => p.type === 'next-project') && (
+                      <button
+                        onClick={() => handleAddPlaceholder('next-project')}
+                        className="flex items-center gap-sm px-md py-sm border border-dashed border-outline-variant rounded-lg hover:bg-primary/5 transition-colors text-body-md text-on-surface-variant font-medium"
+                      >
+                        <span className="material-symbols-outlined text-primary text-[18px]">arrow_forward</span>
+                        Add Next Project Link
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -433,11 +462,11 @@ export function TemplatesPage() {
               <h3 className="text-h3 font-h3 text-on-surface">Data Visibility Warning</h3>
             </div>
             <p className="text-body-md text-on-surface-variant mb-md">
-              Removing the <strong>{pendingDeletePlaceholder}</strong> placeholder will hide this content from 
+              Removing the <strong>{pendingDeletePlaceholder}</strong> placeholder will hide this content from
               <strong> {affectedPagesInfo.affectedPageCount} page(s)</strong> currently using this layout.
             </p>
             <p className="text-body-sm text-on-surface-variant mb-lg">
-              The content will not be deleted from the database. If you re-add this placeholder to the layout later, 
+              The content will not be deleted from the database. If you re-add this placeholder to the layout later,
               the content will automatically reappear.
             </p>
 
@@ -463,6 +492,6 @@ export function TemplatesPage() {
       )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </AppLayout>
+    </>
   );
 }

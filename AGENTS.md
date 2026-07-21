@@ -118,6 +118,12 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 - `publishedVersionId` = pointer to published version, change it to publish (don't mutate version in place)
 - `Page.title` is unversioned (internal name), `PageVersion.seoMeta.title` is versioned (public SEO title)
 - DRAFT version can be deleted; deleting DRAFT clears all blocks via cascade
+- `GET /pages` filters by `templateId`: **no `templateId` in query → static pages only**
+  (`templateId IS NULL`); `templateId=<uuid>` → pages of that template only. There is no
+  "all pages regardless of template" mode — each Sidebar nav item (`Pages` vs each template)
+  maps to exactly one `templateId` value, never omitted client-side arbitrarily. `CreatePageModal`
+  respects the same context: opened from a template tab, its template select is pre-filled and
+  locked to that `templateId`.
 
 ### Pages & Versions (bổ sung)
 - **Tối đa 1 DRAFT/page được enforce ở DB** bằng partial unique index

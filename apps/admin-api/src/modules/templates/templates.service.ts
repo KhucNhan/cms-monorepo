@@ -1,10 +1,6 @@
 import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
+  Injectable, NotFoundException, BadRequestException, ConflictException,
 } from '@nestjs/common';
-import { ContentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '@cms/shared-types';
 import { isValidBlockType } from '@cms/block-registry/schema-only';
@@ -15,11 +11,7 @@ export class TemplatesService {
 
   async findAll() {
     return this.prisma.template.findMany({
-      include: {
-        placeholders: {
-          orderBy: { orderIndex: 'asc' },
-        },
-      },
+      include: { placeholders: { orderBy: { orderIndex: 'asc' } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -27,60 +19,58 @@ export class TemplatesService {
   async findOne(id: string) {
     const template = await this.prisma.template.findUnique({
       where: { id },
-      include: {
-        placeholders: {
-          orderBy: { orderIndex: 'asc' },
-        },
-      },
+      include: { placeholders: { orderBy: { orderIndex: 'asc' } } },
     });
-
     if (!template) {
-      throw new NotFoundException({
-        code: ErrorCode.NOT_FOUND,
-        message: 'Template not found',
-      });
+      throw new NotFoundException({ code: ErrorCode.NOT_FOUND, message: 'Template not found' });
     }
-
     return template;
   }
 
-  async create(data: { name: string; contentType: ContentType }) {
-    const existing = await this.prisma.template.findUnique({
-      where: { contentType: data.contentType },
-    });
+  /**
+   * slugPrefix is auto-generated and IMMUTABLE — never accepted from the
+   * client (schema §"Template" comment: renaming `name` later must not
+   * break existing public URLs under /{slugPrefix}/{slug}).
+   */
+  private buildSlugPrefix(name: string): string {
+    const base = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return `${base}s`;
+  }
 
+  async create(data: { name: string }) {
+    const slugPrefix = this.buildSlugPrefix(data.name);
+
+    const existing = await this.prisma.template.findUnique({ where: { slugPrefix } });
     if (existing) {
       throw new ConflictException({
         code: ErrorCode.CONFLICT,
-        message: `Template for content type "${data.contentType}" already exists.`,
+        message: `A template generating slugPrefix "${slugPrefix}" already exists — choose a different name.`,
       });
     }
 
-    // Khi tạo template mới, mặc định tự động tạo 1 placeholder đặc biệt: 'content-outlet'
+    // content-outlet placeholder mặc định vẫn giữ nguyên như cũ
     return this.prisma.template.create({
       data: {
         name: data.name,
-        contentType: data.contentType,
+        slugPrefix,
         placeholders: {
-          create: {
-            type: 'content-outlet',
-            orderIndex: 0,
-          },
+          create: { type: 'content-outlet', orderIndex: 0 },
         },
       },
-      include: {
-        placeholders: {
-          orderBy: { orderIndex: 'asc' },
-        },
-      },
+      include: { placeholders: { orderBy: { orderIndex: 'asc' } } },
     });
   }
 
-  async setPlaceholders(id: string, placeholders: Array<{ type: string; orderIndex: number }>) {
-    await this.findOne(id); // Ensure template exists
+  async setPlaceholders(
+    id: string,
+    placeholders: Array<{ type: string; orderIndex: number }>,
+  ) {
+    await this.findOne(id);
 
-    // Validate:
-    // 1. Phải có đúng 1 'content-outlet'
     const outlets = placeholders.filter((p) => p.type === 'content-outlet');
     if (outlets.length !== 1) {
       throw new BadRequestException({
@@ -89,19 +79,14 @@ export class TemplatesService {
       });
     }
 
-    // 2. Không cho 2 placeholder cùng type ngoài 'content-outlet'
-    const nonOutletTypes = placeholders
-      .filter((p) => p.type !== 'content-outlet')
-      .map((p) => p.type);
-    const uniqueTypes = new Set(nonOutletTypes);
-    if (uniqueTypes.size !== nonOutletTypes.length) {
+    const nonOutletTypes = placeholders.filter((p) => p.type !== 'content-outlet').map((p) => p.type);
+    if (new Set(nonOutletTypes).size !== nonOutletTypes.length) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
         message: 'Duplicate placeholder types are not allowed.',
       });
     }
 
-    // 3. Mỗi placeholder type phải là block type hợp lệ trong block-registry
     for (const p of placeholders) {
       if (!isValidBlockType(p.type)) {
         throw new BadRequestException({
@@ -111,16 +96,17 @@ export class TemplatesService {
       }
     }
 
-    // Thực hiện overwrite trong transaction
     await this.prisma.$transaction([
-      this.prisma.templatePlaceholder.deleteMany({
-        where: { templateId: id },
-      }),
+      this.prisma.templatePlaceholder.deleteMany({ where: { templateId: id } }),
       this.prisma.templatePlaceholder.createMany({
         data: placeholders.map((p) => ({
           templateId: id,
           type: p.type,
           orderIndex: p.orderIndex,
+          // Fixed, non-configurable rule (client input removed — see
+          // setPlaceholdersSchema comment): ONLY 'hero' autofills 'title'
+          // from Page.title. No other placeholder type gets an autoFillMap.
+          autoFillMap: p.type === 'hero' ? { title: 'page.title' } : undefined,
         })),
       }),
     ]);
@@ -129,54 +115,26 @@ export class TemplatesService {
   }
 
   async delete(id: string) {
-    const template = await this.findOne(id);
-
-    // Chặn nếu còn Page đang dùng
-    const pagesUsing = await this.prisma.page.count({
-      where: { templateId: id },
-    });
-
+    await this.findOne(id);
+    const pagesUsing = await this.prisma.page.count({ where: { templateId: id } });
     if (pagesUsing > 0) {
       throw new ConflictException({
         code: ErrorCode.CONFLICT,
         message: `Cannot delete template in use by ${pagesUsing} page(s).`,
       });
     }
-
-    return this.prisma.template.delete({
-      where: { id },
-    });
+    return this.prisma.template.delete({ where: { id } });
   }
 
   async previewDeletePlaceholder(id: string, type: string) {
-    await this.findOne(id); // Ensure template exists
-
-    // Đếm số page đang dùng template này có block với type trùng placeholder sắp xoá
-    // (Những block này sẽ trở thành block mồ côi)
+    await this.findOne(id);
     const affectedPages = await this.prisma.page.findMany({
-      where: {
-        templateId: id,
-        versions: {
-          some: {
-            blocks: {
-              some: { type },
-            },
-          },
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-      },
+      where: { templateId: id, versions: { some: { blocks: { some: { type } } } } },
+      select: { id: true, title: true, slug: true },
     });
-
     return {
       affectedPageCount: affectedPages.length,
-      affectedPages: affectedPages.map((p) => ({
-        id: p.id,
-        title: p.title || p.slug,
-      })),
+      affectedPages: affectedPages.map((p) => ({ id: p.id, title: p.title || p.slug })),
     };
   }
 }

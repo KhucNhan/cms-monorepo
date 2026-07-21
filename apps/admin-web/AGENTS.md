@@ -2,6 +2,35 @@
 
 > Read `/AGENTS.md` (root) first. This file only covers conventions specific to `admin-web`.
 
+## 0.1 App Shell — Sidebar/TopNav mount ONCE (not per-page)
+
+`AppLayout.tsx` (old per-page wrapper) has been **removed**. `AppShell.tsx` is now a React
+Router **layout route** (`App.tsx`, wraps every route under `ProtectedRoute`) that renders
+`Sidebar` + `TopNav` + `<main><Outlet/></main>` exactly once for the entire authenticated app.
+
+- **Never** re-introduce a per-page `<AppLayout>` wrapper — this was the root cause of a real bug:
+  Sidebar was recreated on every navigation to a different route, re-running its
+  `templatesApi.list()` fetch from scratch, causing the template nav items to visibly disappear
+  and reappear ("flicker") on every tab switch. `AppShell` fixes this by construction — Sidebar's
+  effect only runs once per login session.
+- Pages declare their `TopNav` header via `useAppLayoutHeader({ title, breadcrumb?, actions? })`
+  (`context/AppLayoutContext.tsx`) instead of wrapping their JSX in `<AppLayout>`. Call it near the
+  top of the component; it re-runs on every render by design (needed for `actions` containing live
+  controlled inputs, e.g. `SearchInput`).
+- `LoginPage`/`GoogleCallbackPage` stay **outside** `AppShell` (no Sidebar/TopNav) — they sit as
+  siblings in `App.tsx`, not children of the `AppShell` layout route.
+- **`AppLayoutContext.tsx` dùng 2 context tách biệt, KHÔNG gộp `{header, setHeader}` vào 1 object.**
+  Đây là bài học từ 1 bug infinite-loop thật đã xảy ra: khi gộp chung, mọi page gọi
+  `useAppLayoutHeader()` đều gián tiếp `useContext` trên object đó — object bị tạo mới mỗi lần
+  Provider re-render, nên React ép TẤT CẢ consumer re-render mỗi khi `setHeader()` chạy, kể cả
+  chính page vừa gọi nó → page re-render → `useLayoutEffect` (không dependency) chạy lại →
+  gọi lại `setHeader()` → lặp vô hạn ("Maximum update depth exceeded"). Việc tách `TopNavConnected`
+  khỏi `AppShellInner` (mục trước) là ĐÚNG nhưng KHÔNG ĐỦ để chặn bug này — nguyên nhân thật nằm ở
+  chỗ page tự subscribe context qua hook, không liên quan gì đến cây `<Outlet/>`. Fix: tách
+  `HeaderValueContext` (chỉ `TopNavConnected` đọc) và `SetHeaderContext` (chỉ truyền hàm setState,
+  identity ổn định vĩnh viễn theo React — page dùng context này để gọi `setHeader`, không bao giờ
+  bị ép re-render vì nó không đổi).
+
 ## 1. Mandatory rules
 
 | Rule | Detail |
@@ -84,6 +113,28 @@ Both sections are still bundled into a single request when pressing **Save Draft
 `title`/`slug` → `pagesApi.update()` (updates `Page` directly, independent of DRAFT/PUBLISHED
 state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as before). See
 `saveAllChanges()` in `PageEditPage.tsx`.
+
+## 5.3 Content Management — filtered by template tab
+
+- Sidebar generates one nav item per Template (`/content-management?templateId=<id>`) plus a
+  static `Pages` item (`/content-management`, no query). `ContentManagementPage.tsx` reads
+  `templateId` from `useSearchParams()` and passes it straight into `usePages({ ..., templateId })`
+  — resetting `page` back to `1` whenever `templateId` changes (same pattern as the search reset).
+- `CreatePageModal` receives `defaultTemplateId` from the current tab's `templateId` and
+  pre-selects + **locks** the template `<select>` when present — prevents creating a page under
+  the wrong tab (e.g. creating a "Blog" page while viewing `Pages`, which would silently vanish
+  from the current list since it now filters by `templateId`).
+- **Cache layer** (`usePages.ts`, module-level `Map`, không phải TanStack Query — app này chưa
+  dùng lib đó, xem root AGENTS.md mục 5): key = `JSON.stringify(filters)`, tách theo từng
+  `templateId`. Chuyển qua lại giữa các tab đã xem trước đó → hiện ngay lập tức, không loading,
+  tránh nháy trắng bảng. Revalidate ngầm phía sau (stale-while-revalidate đơn giản).
+- **Bắt buộc gọi `invalidatePagesCache()`** (export từ `usePages.ts`) sau MỌI thao tác làm thay
+  đổi dữ liệu hiển thị trên bảng Content Management mà không đi qua chính `usePages` instance
+  đang mở (vì cache là module-level, sống ngoài vòng đời component): tạo page mới
+  (`CreatePageModal`), publish / Set as Draft / delete version / discard draft
+  (`PageEditPage.tsx`). Quên bước này → bảng hiện data cũ (stale) khi quay lại tab, cho tới khi
+  cache tự hết hạn — mà cache này KHÔNG có TTL, nên sẽ stale vĩnh viễn cho tới lần
+  `invalidatePagesCache()` tiếp theo hoặc reload trang.
 
 ## 6. Page Sections (blocks) card
 
@@ -187,3 +238,10 @@ call returns 404. Full details: `DEPLOYMENT.md` at root.
 
 ⚠️ Vite 6's `preview` blocks unrecognized hosts by default — when mapping a domain via Cloudflare
 Tunnel or another reverse proxy, add the domain to `preview.allowedHosts` in `vite.config.ts`.
+
+## 12. Templates Page — no autoFillMap UI
+
+`TemplatesPage.tsx` no longer has a per-field autofill dropdown. `hero` placeholders always
+autofill `title` from `Page.title` — this is a fixed backend rule (`TemplatesService
+.setPlaceholders()`), not something this page configures. `TemplatePlaceholder.autoFillMap` in
+`payload` sent via `templatesApi.setPlaceholders()` is never populated from this page anymore.

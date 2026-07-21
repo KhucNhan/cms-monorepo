@@ -108,7 +108,7 @@ async function main() {
 
   // ── 4. Sample homepage ──────────────────────────────────
   console.log('\n📄 Creating sample homepage...');
-  const existing = await prisma.page.findUnique({ where: { slug: 'homepage' } });
+const existing = await prisma.page.findFirst({ where: { slug: 'homepage', templateId: null } });
 
   if (!existing) {
     await prisma.page.create({

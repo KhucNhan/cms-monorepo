@@ -8,6 +8,7 @@ describe('mergeTemplateWithPage', () => {
     templateId: 'template-1',
     type,
     orderIndex,
+    autoFillMap: null,
     updatedAt: new Date(),
   });
 
