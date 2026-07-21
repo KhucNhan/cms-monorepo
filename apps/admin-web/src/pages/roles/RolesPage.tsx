@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
@@ -89,8 +89,10 @@ export function RolesPage() {
     return groups;
   }, [allPermissions]);
 
+  useAppLayoutHeader({ title: 'Roles & Permissions' });
+
   return (
-    <AppLayout title="Roles & Permissions">
+    <>
       <div className="p-xl grid grid-cols-[280px_1fr] gap-xl">
         {/* Cột trái: danh sách role */}
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-md h-fit">
@@ -215,6 +217,6 @@ export function RolesPage() {
       )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </AppLayout>
+    </>
   );
 }

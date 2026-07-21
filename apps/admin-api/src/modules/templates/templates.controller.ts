@@ -1,28 +1,25 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
+  Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, RequirePermissions } from '../auth/guards/roles.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { TemplatesService } from './templates.service';
-import { ContentType } from '@prisma/client';
 import { z } from 'zod';
 
+// contentType removed — Template no longer maps 1:1 to a fixed content type.
+// slugPrefix is server-generated (see TemplatesService.create), never client input.
 export const createTemplateSchema = z.object({
   name: z.string().min(1).max(100),
-  contentType: z.nativeEnum(ContentType),
 });
 
+// Client no longer configures autoFillMap — it's now a fixed backend rule
+// (only 'hero' placeholders autofill their 'title' from Page.title, see
+// TemplatesService.setPlaceholders). Accepting autoFillMap from the client
+// was the root cause of a real bug: a UI-selectable dropdown allowed mapping
+// a string source onto a non-string field (e.g. faq.items), crashing page
+// creation with a ZodError. Removed entirely rather than re-validated.
 export const setPlaceholdersSchema = z.object({
   placeholders: z.array(
     z.object({

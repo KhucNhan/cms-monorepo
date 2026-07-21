@@ -49,6 +49,23 @@
   hàng loạt mà không kiểm tra thủ công trước (2 DRAFT trùng có thể có nội dung khác nhau, không
   phải lúc nào bản mới nhất cũng là bản "đúng").
 
+## 2.2 Template Autofill — fixed rule, not client-configurable
+
+`autoFillMap` on `TemplatePlaceholder` is **no longer accepted from the client**
+(`setPlaceholdersSchema` has no `autoFillMap` field). `TemplatesService.setPlaceholders()`
+derives it server-side with a single fixed rule: placeholder `type === 'hero'` →
+`{ title: 'page.title' }`; every other type → `undefined` (no autofill).
+
+**Why removed**: the previous design let admin-web offer a dropdown mapping ANY block field
+(including array/object fields like `faq.items: FaqItem[]`) to a string source
+(`page.title`/`page.slug`). This crashed `PagesService.create()` with an unhandled `ZodError`
+(500) whenever `items` got mapped to a string — `resolveAutoFill()` had no field-type check.
+Rather than keep validating an open-ended client input, autofill was simplified to the one rule
+actually needed in product. If a future task asks for other autofill mappings, that's a deliberate
+feature re-add — re-introduce `resolveAutoFill()`'s type-guard (`typeof existing !== 'string' →
+skip`, see `template-autofill.util.ts`) AND client-side validation together, don't repeat the
+unguarded-client-input mistake.
+
 ## 3. Page Version Endpoints
 
 - `POST /page-versions/:id/revert` (Set as Draft): deletes the current DRAFT if one exists
@@ -75,6 +92,19 @@
   `seoMeta`, which only applies after Publish). This is an intentional tradeoff. If a future task
   requires `title` to be versioned like `seoMeta`, that is an **architecture change** (move
   `title` to `PageVersion`), not a bugfix.
+
+## 4.1 `GET /pages` — filter by `templateId`
+
+- `listPagesSchema` has an optional `templateId` (uuid). `PagesService.findAll()` always applies
+  `where.templateId = params.templateId ?? null` — **never** omits the field from `where`. Using
+  `undefined` instead of `null` would make Prisma skip the filter entirely and return pages across
+  all templates mixed together — this was a real bug (Sidebar linked to
+  `/content-management?templateId=X` but the endpoint ignored the param, so every template's pages
+  and static pages rendered in the same table, all clickable regardless of the active tab).
+- Consequence: there is no single "list every page regardless of template" mode via this endpoint.
+  If a future task needs that, it's a new query param (e.g. `templateId=all`), not a change to the
+  default behavior — default must stay `null` (static pages only) to match the Sidebar's "Pages"
+  item.
 
 ## 5. RBAC — Roles & Permissions (`modules/roles/`)
 

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { usePages } from '@/hooks/usePages';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -87,16 +87,9 @@ export function DashboardPage() {
   const canEditPage = can('page:update');
   const { pages, total, loading: pagesLoading } = usePages({ page: 1, pageSize: 4 });
   const visibleQuickActions = QUICK_ACTIONS.filter((action) => !action.permission || can(action.permission));
+  
+  useAppLayoutHeader({ title: 'Dashboard' });
   return (
-    <AppLayout
-      title="Dashboard"
-      // actions={
-      //   <>
-      //     <Button variant="secondary" icon="download" size="md">Export Data</Button>
-      //     <Button variant="primary"   icon="add"      size="md">Create New</Button>
-      //   </>
-      // }
-    >
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto space-y-xl">
           {/* Welcome */}
@@ -276,6 +269,5 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

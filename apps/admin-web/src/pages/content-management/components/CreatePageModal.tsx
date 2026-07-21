@@ -30,9 +30,11 @@ interface CreatePageModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (page: Page) => void;
+  /** Template context hiện tại (từ URL). undefined = đang ở tab "Pages" (static). */
+  defaultTemplateId?: string;
 }
 
-export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalProps) {
+export function CreatePageModal({ isOpen, onClose, onCreated, defaultTemplateId }: CreatePageModalProps) {
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
@@ -48,14 +50,15 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
       setSlugTouched(false);
       setSlugError(undefined);
       setSubmitting(false);
-      setSelectedTemplateId('');
+      setSelectedTemplateId(defaultTemplateId ?? '');
     } else {
-      // Fetch templates
       templatesApi.list()
         .then((data) => setTemplates(data))
         .catch((err) => console.error('Failed to load templates:', err));
+      // Pre-select the template of the tab this modal was opened from.
+      setSelectedTemplateId(defaultTemplateId ?? '');
     }
-  }, [isOpen]);
+  }, [isOpen, defaultTemplateId]);
 
   useEffect(() => {
     if (!slugTouched) {
@@ -153,15 +156,21 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
             <select
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
-              className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface focus:outline-none"
+              disabled={!!defaultTemplateId}
+              className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">No Template (Free-form layout)</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} ({t.contentType})
+                  {t.name} ({t.slugPrefix})
                 </option>
               ))}
             </select>
+            {defaultTemplateId && (
+              <p className="text-label-sm text-on-surface-variant">
+                Locked to the current template tab.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-md justify-end pt-sm">

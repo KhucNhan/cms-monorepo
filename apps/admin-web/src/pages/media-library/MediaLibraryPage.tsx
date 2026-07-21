@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
@@ -137,10 +137,9 @@ export function MediaLibraryPage() {
     [updateMedia, addToast],
   );
 
-  return (
-    <AppLayout
-      title="Media Library"
-      actions={
+  useAppLayoutHeader({
+    title: 'Media Library',
+    actions: [
         <>
           <SearchInput
             placeholder="Search media..."
@@ -175,11 +174,13 @@ export function MediaLibraryPage() {
             Refresh
           </Button>
         </>
-      }
-    >
+    ]
+  })
+
+  return (
+    <>
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto">
-
           {/* ── Mime-type filter chips ── */}
           <div className="flex flex-wrap items-center gap-xs mb-lg">
             {MIME_FILTERS.map((f) => (
@@ -302,7 +303,7 @@ export function MediaLibraryPage() {
       )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </AppLayout>
+    </>
   );
 }
 

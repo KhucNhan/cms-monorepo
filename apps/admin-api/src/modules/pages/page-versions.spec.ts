@@ -42,9 +42,12 @@ describe('PageVersionsService.publish — invariant 1.5: chỉ flip pointer, kh�
       data: { status: 'PUBLISHED' },
     });
     // (3) Page.publishedVersionId = pointer duy nhất bị thay đổi ở tầng Page
+    // (include.template chỉ để đọc slugPrefix cho revalidate tag — không phải
+    // một update nào khác lên nội dung version, invariant 1.5 vẫn giữ nguyên)
     expect(prismaMock.page.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
       data: { publishedVersionId: 'v2' },
+      include: { template: { select: { slugPrefix: true } } },
     });
     expect(result.page.publishedVersionId).toBe('v2');
   });
@@ -74,5 +77,25 @@ describe('PageVersionsService.publish — invariant 1.5: chỉ flip pointer, kh�
 
     await expect(service.publish('p1', 'v2')).resolves.toBeDefined();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('publish thành công cho template page → tag revalidate dùng slugPrefix/slug', async () => {
+    prismaMock.pageVersion.findFirst.mockResolvedValue({ id: 'v2', pageId: 'p1' });
+    prismaMock.pageVersion.update.mockResolvedValue({ id: 'v2' });
+    prismaMock.page.update.mockResolvedValue({
+      id: 'p1',
+      slug: 'agas',
+      templateId: 't1',
+      template: { slugPrefix: 'projects' },
+    });
+
+    await service.publish('p1', 'v2');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://web.example.com/api/revalidate',
+      expect.objectContaining({
+        body: JSON.stringify({ tags: ['page:projects/agas', 'published-pages'] }),
+      }),
+    );
   });
 });

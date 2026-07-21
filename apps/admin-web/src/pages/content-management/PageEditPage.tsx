@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { pagesApi } from '@/api/pages.api';
@@ -8,7 +8,7 @@ import { pageVersionsApi } from '@/api/page-versions.api';
 import { blocksApi } from '@/api/blocks.api';
 import { templatesApi } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
-
+import { invalidatePagesCache } from '@/hooks/usePages';
 import { BlockPickerModal } from './BlockPickerModal';
 import { BlockSectionCard } from './components/BlockSectionCard';
 import { UnsavedChangesModal } from './components/UnsavedChangesModal';
@@ -447,6 +447,7 @@ export function PageEditPage() {
       }
 
       await pagesApi.publish(page.id, versionIdToPublish);
+      invalidatePagesCache();
       addToast('Page published live to public website successfully!', 'success');
       await initializePage();
     } catch (err) {
@@ -468,6 +469,7 @@ export function PageEditPage() {
     setIsReverting(true);
     try {
       await pageVersionsApi.revert(pendingRevertVersion.id);
+      invalidatePagesCache();
       setPendingRevertVersion(null);
       setShowHistory(false);
       await initializePage();
@@ -491,6 +493,7 @@ export function PageEditPage() {
     setIsDeletingVersion(true);
     try {
       await pageVersionsApi.deleteVersion(pendingDeleteVersion.id);
+      invalidatePagesCache();
       setPendingDeleteVersion(null);
       await initializePage();
       addToast('Version deleted successfully.', 'info');
@@ -509,12 +512,13 @@ export function PageEditPage() {
     setIsDiscardingDraft(true);
     try {
       await pageVersionsApi.deleteDraft(currentVersion.id);
+      invalidatePagesCache();
       setShowDiscardDraftConfirm(false);
       await initializePage();
-      addToast('Đã quay về bản đang publish.', 'success');
+      addToast('Reverted to the current publication version.', 'success');
     } catch (err) {
       console.error(err);
-      const msg = err instanceof ApiClientError ? err.message : 'Thao tác thất bại. Vui lòng thử lại.';
+      const msg = err instanceof ApiClientError ? err.message : 'Revert failed. Please try again.';
       addToast(msg, 'error');
     } finally {
       setIsDiscardingDraft(false);
@@ -566,37 +570,86 @@ export function PageEditPage() {
     return { placeholderBlocks: implementedMap, outletBlocks: outlet };
   }, [blocks, pageTemplate]);
 
-  // ─── Render Loading / Error States ────────────────────────────────────────
+  const isDraftStatus = currentVersion?.status === 'DRAFT';
 
+    useAppLayoutHeader(
+    loading && blocks.length === 0
+      ? { title: 'Content Management' }
+      : error || !page
+      ? { title: 'Content Management', breadcrumb: { label: 'Pages', highlight: 'Error' } }
+      : {
+          title: 'Content Management',
+          // breadcrumb={{ label: 'Pages', highlight: `/${page.slug} [...]` }} — giữ comment-out như bản gốc
+          actions: (
+            <div className="flex items-center gap-sm">
+              <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
+                Back
+              </Button>
+              <Button variant="ghost" icon="history" onClick={() => setShowHistory((v) => !v)}>
+                History
+              </Button>
+              {isDraftStatus && page?.publishedVersion && (
+                <Button
+                  variant="ghost"
+                  icon="undo"
+                  onClick={() => setShowDiscardDraftConfirm(true)}
+                  disabled={isDiscardingDraft || saving || publishing}
+                >
+                  Revert to Published
+                </Button>
+              )}
+              <Can permission="page:update">
+                <Button
+                  variant="secondary"
+                  icon="save"
+                  onClick={handleSave}
+                  disabled={!isDirty || saving || publishing}
+                  loading={saving}
+                >
+                  Save Draft
+                </Button>
+              </Can>
+              <Can permission="page:publish">
+                <Button
+                  variant="primary"
+                  icon="publish"
+                  onClick={handlePublish}
+                  disabled={saving || publishing || (!isDraftStatus && !isDirty)}
+                  loading={publishing}
+                >
+                  Publish Live
+                </Button>
+              </Can>
+            </div>
+          ),
+        },
+  );
+
+  // ─── Loading ───────────────────────────────────────────────────────────
   if (loading && blocks.length === 0) {
     return (
-      <AppLayout title="Content Management" >
-        <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
-          <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Loading Page Editor…
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
+        <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Loading Page Editor…
+      </div>
     );
   }
 
+  // ─── Error ─────────────────────────────────────────────────────────────
   if (error || !page) {
     return (
-      <AppLayout title="Content Management" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
-        <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
-          <span className="material-symbols-outlined text-[48px] text-error">error</span>
-          <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
-          <Button variant="secondary" onClick={() => navigate('/content-management')}>
-            Back to Pages
-          </Button>
-        </div>
-      </AppLayout>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
+        <span className="material-symbols-outlined text-[48px] text-error">error</span>
+        <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
+        <Button variant="secondary" onClick={() => navigate('/content-management')}>
+          Back to Pages
+        </Button>
+      </div>
     );
   }
-
-  const isDraftStatus = currentVersion?.status === 'DRAFT';
 
   // ─── Combine DRAFT / PUBLISHED / ARCHIVED into one list for the History panel ──
   // DRAFT and PUBLISHED always float to the top (so the user can see & track
@@ -625,59 +678,7 @@ export function PageEditPage() {
   });
 
   return (
-    <AppLayout
-      title="Content Management"
-      // breadcrumb={{
-        // label: 'Pages',
-        // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
-      // }}
-      actions={
-        <div className="flex items-center gap-sm">
-          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
-            Back
-          </Button>
-          <Button
-            variant="ghost"
-            icon="history"
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            History
-          </Button>
-          {isDraftStatus && page?.publishedVersion && (
-            <Button
-              variant="ghost"
-              icon="undo"
-              onClick={() => setShowDiscardDraftConfirm(true)}
-              disabled={isDiscardingDraft || saving || publishing}
-            >
-              Revert to Published
-            </Button>
-          )}
-          <Can permission="page:update">
-            <Button
-              variant="secondary"
-              icon="save"
-              onClick={handleSave}
-              disabled={!isDirty || saving || publishing}
-              loading={saving}
-            >
-              Save Draft
-            </Button>
-          </Can>
-          <Can permission="page:publish">
-            <Button
-              variant="primary"
-              icon="publish"
-              onClick={handlePublish}
-              disabled={saving || publishing || (!isDraftStatus && !isDirty)}
-              loading={publishing}
-            >
-              Publish Live
-            </Button>
-          </Can>
-        </div>
-      }
-    >
+    <>
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto space-y-lg">
           
@@ -842,7 +843,7 @@ export function PageEditPage() {
                 <div className="flex items-center gap-sm">
                   <span className="material-symbols-outlined text-secondary text-[20px]">view_carousel</span>
                   <h3 className="text-h4 font-semibold text-on-surface">Template: {pageTemplate.name}</h3>
-                  <span className="px-sm py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary uppercase">{pageTemplate.contentType}</span>
+                  <span className="px-sm py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary uppercase">{pageTemplate.slugPrefix}</span>
                 </div>
                 <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
                   {isTemplateOpen ? 'expand_less' : 'expand_more'}
@@ -1221,6 +1222,6 @@ export function PageEditPage() {
           </div>
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }

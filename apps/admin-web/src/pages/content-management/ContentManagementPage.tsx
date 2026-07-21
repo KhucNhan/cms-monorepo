@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { usePages } from '@/hooks/usePages';
+import { usePages, invalidatePagesCache } from '@/hooks/usePages';
 import { CreatePageModal } from '@/pages/content-management/components/CreatePageModal';
 import { Can } from '@/components/Can';
 import type { Page, VersionStatus } from '@/types';
@@ -46,15 +46,19 @@ export function ContentManagementPage() {
     setPage(1);
   }, [debouncedSearch]);
 
-  // Search thật ở server (BE đã hỗ trợ `search` trong listPagesSchema + PagesService.findAll),
-  // không tự filter/fetch-all ở client — pageSize luôn hợp lệ (≤ 100 theo Zod schema).
+  const [searchParams] = useSearchParams();
+  const templateId = searchParams.get('templateId') ?? undefined;
+
+  useEffect(() => {
+    setPage(1);
+  }, [templateId]);
+
   const { pages, total, loading, error, refetch, deletePage } = usePages({
     page,
     pageSize: PAGE_SIZE,
     search: debouncedSearch || undefined,
+    templateId,
   });
-
-  const [searchParams] = useSearchParams();
 
   const sortedPages = useMemo(() => {
     if (!sortField) {
@@ -94,24 +98,22 @@ export function ContentManagementPage() {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  useAppLayoutHeader({
+    title: 'Content Management',
+    actions: (
+      <>
+        <SearchInput placeholder="Search pages..." value={search} onChange={setSearch} />
+        <Can permission="page:create">
+          <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
+            New Page
+          </Button>
+        </Can>
+      </>
+    ),
+  });
+
   return (
-    <AppLayout
-      title="Content Management"
-      actions={
-        <>
-          <SearchInput
-            placeholder="Search pages..."
-            value={search}
-            onChange={setSearch}
-          />
-          <Can permission="page:create">
-            <Button variant="primary" icon="add" size="md" onClick={() => setIsCreateModalOpen(true)}>
-              New Page
-            </Button>
-          </Can>
-        </>
-      }
-    >
+    <>
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto">
 
@@ -251,13 +253,15 @@ export function ContentManagementPage() {
         <CreatePageModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
+          defaultTemplateId={templateId}
           onCreated={(created) => {
+            invalidatePagesCache();
             setIsCreateModalOpen(false);
             navigate(`/pages/${created.id}/edit`);
           }}
         />
       )}
-    </AppLayout>
+    </>
   );
 }
 

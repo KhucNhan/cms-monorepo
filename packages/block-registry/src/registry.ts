@@ -1,6 +1,7 @@
 import { heroBlock } from './blocks/hero';
 import { richTextBlock } from './blocks/rich-text';
 import { faqBlock } from './blocks/faq';
+import { nextProjectBlock } from './blocks/next-project';
 import { contentOutletBlock } from './blocks/content-outlet';
 import type { BlockDefinition } from './types';
 
@@ -16,6 +17,7 @@ const ALL_BLOCKS: BlockDefinition[] = [
   faqBlock,
   // content-outlet: marker-only, not shown in BlockPickerModal (filtered by UI)
   contentOutletBlock,
+  nextProjectBlock,
   // Phase 3: bannerBlock, galleryBlock, productListBlock, ctaBlock
 ];
 

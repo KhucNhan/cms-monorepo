@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
@@ -130,11 +130,10 @@ export function UsersManagementPage() {
     }
   };
 
-  return (
-    <AppLayout
-      title="Users"
-      actions={
-        <>
+  useAppLayoutHeader({
+    title: 'Content Management',
+    actions: (
+      <>
           <SearchInput
             placeholder="Search users..."
             value={search}
@@ -159,8 +158,11 @@ export function UsersManagementPage() {
             </Button>
           </Can>
         </>
-      }
-    >
+    ),
+  });
+
+  return (
+    <>
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto">
           {/* <div className="flex items-center justify-between mb-xl">
@@ -367,7 +369,7 @@ export function UsersManagementPage() {
       )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </AppLayout>
+    </>
   );
 }
 
