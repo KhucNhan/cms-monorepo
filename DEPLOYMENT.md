@@ -115,11 +115,58 @@ cd apps/admin-api
 env $(grep -v '^#' .env | xargs) pnpm exec prisma migrate deploy
 env $(grep -v '^#' .env | xargs) pnpm exec ts-node prisma/seed.ts
 cd ~/cms-monorepo
+
+⚠️ **`prisma/seed.ts` must be re-run on EVERY deploy, not just the first one.** `seed.ts` uses
+`upsert` throughout, so it's idempotent — re-running it never destroys existing data and never
+overwrites an admin password that's already been changed. Why re-running is mandatory: whenever
+`ALL_PERMISSIONS`/`ROLE_PERMISSIONS` in `seed.ts` gains new entries (e.g. adding
+`resource: 'template'`), forgetting to re-seed on the server leaves the production `permissions`
+table missing those rows — every request to a route requiring that permission then gets
+`403 Forbidden`, even though the code/migration deployed correctly and local works fine (local
+dev re-seeds repeatedly while coding). This happened for real with `template:read` after the
+Templates module was added — see "Post-Deploy Verification" below for a quick check.
+
+⚠️ **Re-seeding does NOT update the JWT of already-logged-in users.** `RolesGuard` reads
+`permissions[]` straight from the JWT (no per-request DB query — see
+`apps/admin-api/AGENTS.md` Section 5), so a user who logged in before the new permission existed
+still gets 403 until they **log out and log back in** to get a fresh JWT. After any deploy that
+adds a new permission, notify affected users to re-login.
 ```
 
 Use `env $(...) <command>` rather than `export $(...)` — this keeps env vars (especially
 `NODE_ENV=production`) scoped to the single command instead of leaking into the shell session
 (see Step 3 gotcha).
+
+## 6.1 GOTCHA — `tsc build`/`nest build` exits 0 but produces no `dist/`
+
+If `pnpm --filter admin-api build` finishes with exit code `0`, no errors printed, but
+`apps/admin-api/dist/` **doesn't exist** (or is missing `main.js`): the near-certain cause is
+`incremental: true` in `packages/tsconfig/nestjs.json`. TypeScript's incremental build stores a
+fingerprint in `apps/admin-api/tsconfig.tsbuildinfo` (gitignored, so it survives `git reset --hard`
+since it's an untracked file). If this file holds the fingerprint from a build run under a
+*different* `tsconfig.json` (different `rootDir`/`include`/`exclude`), `tsc` believes the output
+is already up-to-date and **silently skips emitting anything** — no warning, no error.
+
+**Fix — always clear the cache before rebuilding after a tsconfig change:**
+```bash
+rm -f apps/admin-api/tsconfig.tsbuildinfo
+rm -rf apps/admin-api/dist
+pnpm --filter admin-api build
+```
+`deploy.sh` already does this automatically on every deploy (see the "Cleaning stale incremental
+build caches" step in the script) — but when debugging a build **manually on local**, it's easy
+to forget this step because `rm -rf dist` does NOT remove `tsconfig.tsbuildinfo` (two separate
+files).
+
+**Related — nested output structure (`dist/src/main.js` instead of `dist/main.js`):** if
+`tsconfig.json` drops `rootDir` and widens `include` beyond `src/` (e.g. adding
+`prisma/**/*.ts`, `scripts/*.ts` to silence IDE type errors), TypeScript infers `rootDir` as the
+common parent of every path in `include` — pushing the output one level deeper, so `pnpm start`
+(`node dist/main`) throws `MODULE_NOT_FOUND`. **Don't** fix this by pointing the `start` script at
+`dist/src/main` instead — keep the main tsconfig as-is (`rootDir: "./src"`,
+`include: ["src/**/*"]`, `exclude` containing `"prisma"`), and use a separate
+`apps/admin-api/scripts/tsconfig.json` (`noEmit: true`) purely for IDE type-checking of
+`scripts/*.ts` + `prisma/seed.ts`, without touching the main build.
 
 ## 7. Production Build — All 3 Apps
 
@@ -268,6 +315,10 @@ curl https://admin.khucnhan.io.vn
 curl https://api.khucnhan.io.vn/api/v1/roles
 curl https://khucnhan.io.vn
 curl https://www.khucnhan.io.vn
+
+# If a new permission resource/action was just added to seed.ts, verify it landed in the DB:
+docker exec -it <postgres-container-name> psql -U cms_user -d cms_db -c \
+  "SELECT * FROM permissions WHERE resource = '<resource-name>';"
 ```
 
 ## Open TODOs
