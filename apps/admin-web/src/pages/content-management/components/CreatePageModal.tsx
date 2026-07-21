@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { pagesApi } from '@/api/pages.api';
+import { templatesApi } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
-import type { Page } from '@/types';
+import type { Page, Template } from '@/types';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -29,14 +30,18 @@ interface CreatePageModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (page: Page) => void;
+  /** Template context hiện tại (từ URL). undefined = đang ở tab "Pages" (static). */
+  defaultTemplateId?: string;
 }
 
-export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalProps) {
+export function CreatePageModal({ isOpen, onClose, onCreated, defaultTemplateId }: CreatePageModalProps) {
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugError, setSlugError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
@@ -45,8 +50,15 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
       setSlugTouched(false);
       setSlugError(undefined);
       setSubmitting(false);
+      setSelectedTemplateId(defaultTemplateId ?? '');
+    } else {
+      templatesApi.list()
+        .then((data) => setTemplates(data))
+        .catch((err) => console.error('Failed to load templates:', err));
+      // Pre-select the template of the tab this modal was opened from.
+      setSelectedTemplateId(defaultTemplateId ?? '');
     }
-  }, [isOpen]);
+  }, [isOpen, defaultTemplateId]);
 
   useEffect(() => {
     if (!slugTouched) {
@@ -82,7 +94,11 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
     setSlugError(undefined);
 
     try {
-      const page = await pagesApi.create({ title: title.trim() || undefined, slug });
+      const page = await pagesApi.create({
+        title: title.trim() || undefined,
+        slug,
+        templateId: selectedTemplateId || undefined,
+      });
       onCreated(page);
       onClose();
     } catch (err) {
@@ -134,6 +150,28 @@ export function CreatePageModal({ isOpen, onClose, onCreated }: CreatePageModalP
             error={slugError}
             helperText={!slugError ? 'URL path: /about-us' : undefined}
           />
+
+          <div className="flex flex-col gap-xs">
+            <label className="text-label-sm font-medium text-on-surface-variant">Page Template (Optional)</label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              disabled={!!defaultTemplateId}
+              className="w-full px-md py-sm rounded-lg border border-outline-variant bg-surface text-body-md text-on-surface focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <option value="">No Template (Free-form layout)</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.slugPrefix})
+                </option>
+              ))}
+            </select>
+            {defaultTemplateId && (
+              <p className="text-label-sm text-on-surface-variant">
+                Locked to the current template tab.
+              </p>
+            )}
+          </div>
 
           <div className="flex gap-md justify-end pt-sm">
             <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>

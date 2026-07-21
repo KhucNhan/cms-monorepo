@@ -38,6 +38,25 @@ export interface LoginPayload {
 // ─── Pages (khớp với Prisma schema của BE) ───────────────────────────────────
 
 export type VersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type TemplateContentType = 'BLOG' | 'PROJECT';
+
+export interface TemplatePlaceholder {
+  id: string;
+  templateId: string;
+  type: string;
+  orderIndex: number;
+  autoFillMap: Record<string, string> | null;
+  updatedAt: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  slugPrefix: string; // server-generated, immutable — replaces contentType
+  createdAt: string;
+  updatedAt: string;
+  placeholders: TemplatePlaceholder[];
+}
 
 export interface Block {
   id: string;
@@ -96,6 +115,7 @@ export interface Page {
   slug: string;
   title: string;
   createdAt: string;
+  templateId: string | null;
   publishedVersionId: string | null;
   publishedVersion: {
     id: string;
@@ -124,6 +144,7 @@ export interface PageFilters {
   page?: number;
   pageSize?: number;
   search?: string;
+  templateId?: string;
 }
 
 // ─── Media ───────────────────────────────────────────────────────────────────

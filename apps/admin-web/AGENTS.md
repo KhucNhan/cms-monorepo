@@ -2,6 +2,36 @@
 
 > Read `/AGENTS.md` (root) first. This file only covers conventions specific to `admin-web`.
 
+## 0.1 App Shell — Sidebar/TopNav mount ONCE (not per-page)
+
+`AppLayout.tsx` (old per-page wrapper) has been **removed**. `AppShell.tsx` is now a React
+Router **layout route** (`App.tsx`, wraps every route under `ProtectedRoute`) that renders
+`Sidebar` + `TopNav` + `<main><Outlet/></main>` exactly once for the entire authenticated app.
+
+- **Never** re-introduce a per-page `<AppLayout>` wrapper — this was the root cause of a real bug:
+  Sidebar was recreated on every navigation to a different route, re-running its
+  `templatesApi.list()` fetch from scratch, causing the template nav items to visibly disappear
+  and reappear ("flicker") on every tab switch. `AppShell` fixes this by construction — Sidebar's
+  effect only runs once per login session.
+- Pages declare their `TopNav` header via `useAppLayoutHeader({ title, breadcrumb?, actions? })`
+  (`context/AppLayoutContext.tsx`) instead of wrapping their JSX in `<AppLayout>`. Call it near the
+  top of the component; it re-runs on every render by design (needed for `actions` containing live
+  controlled inputs, e.g. `SearchInput`).
+- `LoginPage`/`GoogleCallbackPage` stay **outside** `AppShell` (no Sidebar/TopNav) — they sit as
+  siblings in `App.tsx`, not children of the `AppShell` layout route.
+- **`AppLayoutContext.tsx` uses 2 separate contexts — do NOT merge `{header, setHeader}` into one
+  object.** This is a lesson from a real infinite-loop bug: when merged, every page calling
+  `useAppLayoutHeader()` indirectly `useContext`s that object — the object gets recreated on every
+  Provider re-render, so React forces ALL consumers to re-render whenever `setHeader()` runs,
+  including the very page that just called it → page re-renders → its dependency-less
+  `useLayoutEffect` runs again → calls `setHeader()` again → infinite loop ("Maximum update depth
+  exceeded"). Splitting `TopNavConnected` out of `AppShellInner` (previous section) was CORRECT but
+  NOT SUFFICIENT to prevent this bug — the real cause is a page subscribing to context via the
+  hook, unrelated to the `<Outlet/>` tree. Fix: split into `HeaderValueContext` (only
+  `TopNavConnected` reads it) and `SetHeaderContext` (only carries the setState function, whose
+  identity is permanently stable per React — pages use this context to call `setHeader` and are
+  never forced to re-render since it never changes).
+
 ## 1. Mandatory rules
 
 | Rule | Detail |
@@ -16,16 +46,17 @@
 **Shadcn migration**: `components/ui/` contains `dialog.tsx`/`select.tsx` (plain radix-ui);
 `Button`, `Input`, `Badge`, `Toast` have been migrated to CVA (class-variance-authority).
 
-## 1.1 Editor component — lấy từ subpath riêng
+## 1.1 Editor component — imported from a dedicated subpath
 
-`BlockDataForm.tsx` lấy Editor component qua `getBlockEditor(type)` từ
-`@cms/block-registry/editors` (subpath riêng, KHÔNG phải `@cms/block-registry` gốc).
-`getBlockDefinition(type)` (từ package gốc) chỉ còn dùng để lấy metadata/validate type, không
-còn field `.Editor`. Lý do tách + checklist khi thêm block mới: `packages/block-registry/AGENTS.md`.
+`BlockDataForm.tsx` gets the Editor component via `getBlockEditor(type)` from
+`@cms/block-registry/editors` (a dedicated subpath, NOT the root `@cms/block-registry`).
+`getBlockDefinition(type)` (from the root package) is now only used for metadata/type validation —
+it no longer has an `.Editor` field. Rationale for the split + checklist for adding a new block:
+`packages/block-registry/AGENTS.md`.
 
-⚠️ Nếu thêm token màu/spacing/font mới trong `Editor.tsx` (dùng chung với `apps/web`), phải đồng
-bộ thủ công sang `apps/web/tailwind.config.js` — token thiếu sẽ render mất màu/mất hover một cách
-âm thầm, không báo lỗi. Xem `packages/block-registry/AGENTS.md`.
+⚠️ If you add a new color/spacing/font token in `Editor.tsx` (shared with `apps/web`), you must
+manually sync it to `apps/web/tailwind.config.js` — a missing token silently renders with no
+color/no hover, no error thrown. See `packages/block-registry/AGENTS.md`.
 
 ## 2. Sidebar (`components/layout/Sidebar.tsx`, state in `useSidebarStore`)
 
@@ -84,6 +115,28 @@ Both sections are still bundled into a single request when pressing **Save Draft
 `title`/`slug` → `pagesApi.update()` (updates `Page` directly, independent of DRAFT/PUBLISHED
 state); `seoMeta` → `pageVersionsApi.updateSeoMeta()` (writes to the DRAFT, as before). See
 `saveAllChanges()` in `PageEditPage.tsx`.
+
+## 5.3 Content Management — filtered by template tab
+
+- Sidebar generates one nav item per Template (`/content-management?templateId=<id>`) plus a
+  static `Pages` item (`/content-management`, no query). `ContentManagementPage.tsx` reads
+  `templateId` from `useSearchParams()` and passes it straight into `usePages({ ..., templateId })`
+  — resetting `page` back to `1` whenever `templateId` changes (same pattern as the search reset).
+- `CreatePageModal` receives `defaultTemplateId` from the current tab's `templateId` and
+  pre-selects + **locks** the template `<select>` when present — prevents creating a page under
+  the wrong tab (e.g. creating a "Blog" page while viewing `Pages`, which would silently vanish
+  from the current list since it now filters by `templateId`).
+- **Cache layer** (`usePages.ts`, a module-level `Map`, not TanStack Query — this app doesn't use
+  that lib, see root AGENTS.md Section 5): key = `JSON.stringify(filters)`, split per `templateId`.
+  Switching back to a previously-viewed tab → shows instantly, no loading state, avoiding a table
+  flash. Revalidates in the background (simple stale-while-revalidate).
+- **Must call `invalidatePagesCache()`** (exported from `usePages.ts`) after ANY action that
+  changes data shown in the Content Management table without going through the currently-open
+  `usePages` instance itself (since the cache is module-level, outliving component lifecycle):
+  creating a page (`CreatePageModal`), publish / Set as Draft / delete version / discard draft
+  (`PageEditPage.tsx`). Skipping this → the table shows stale data when returning to the tab, and
+  stays stale forever since this cache has NO TTL — until the next `invalidatePagesCache()` call
+  or a page reload.
 
 ## 6. Page Sections (blocks) card
 
@@ -187,3 +240,10 @@ call returns 404. Full details: `DEPLOYMENT.md` at root.
 
 ⚠️ Vite 6's `preview` blocks unrecognized hosts by default — when mapping a domain via Cloudflare
 Tunnel or another reverse proxy, add the domain to `preview.allowedHosts` in `vite.config.ts`.
+
+## 12. Templates Page — no autoFillMap UI
+
+`TemplatesPage.tsx` no longer has a per-field autofill dropdown. `hero` placeholders always
+autofill `title` from `Page.title` — this is a fixed backend rule (`TemplatesService
+.setPlaceholders()`), not something this page configures. `TemplatePlaceholder.autoFillMap` in
+`payload` sent via `templatesApi.setPlaceholders()` is never populated from this page anymore.

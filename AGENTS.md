@@ -89,10 +89,10 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 | `Role.permissions` = `Json[]`, no `Permission` model | Schema | Query via `role.permissions`, not `role.rolePermissions` |
 | `Page.title` (unversioned, display name) ≠ `PageVersion.seoMeta.title` (versioned, public `<title>`) | Schema | **Do not confuse.** See `ARCHITECTURE-DESIGN.md` Section 6 |
 | `BlockDefinition.thumbnail` is `optional` | Current | Blocks without a `thumbnail` fall back to the Lucide/Material icon in `BlockPickerModal` — not a bug, just not backfilled yet for that block |
-| `PageVersionsService.getOrCreateDraft()` trước đây thiếu `orderBy` + không chống race condition → có thể tạo ra >1 DRAFT/page | Fixed | DB có unique partial index `page_versions_one_draft_per_page` (WHERE status='DRAFT') chặn ở tầng DB; service có `orderBy: createdAt desc` + retry khi bắt lỗi P2002 |
-| `getOrCreateDraft`/`revertToVersion` trả `image.url` (hero) rỗng vì không enrich từ Media | Fixed | `PageVersionsService` inject `BlocksService`, gọi `enrichBlockData()` trước khi trả blocks — xem `apps/admin-api/AGENTS.md` |
-| `packages/block-registry`: Editor component tách khỏi `registry.ts`, nằm ở `src/editors.ts` (subpath `@cms/block-registry/editors`) | Current | Không đọc `getBlockDefinition(type).Editor` nữa — dùng `getBlockEditor(type)`. Chi tiết + checklist thêm block: `packages/block-registry/AGENTS.md` |
-| `@types/react`/`@types/react-dom` phải pin cứng cùng version, khớp root `pnpm.overrides` | Current | Lệch version (kể cả cùng major) gây lỗi JSX toàn app dù `tsc` package con không báo gì. Chi tiết: `packages/block-registry/AGENTS.md` |
+| `PageVersionsService.getOrCreateDraft()` previously lacked `orderBy` and had no race-condition guard → could create >1 DRAFT/page | Fixed | DB has a unique partial index `page_versions_one_draft_per_page` (WHERE status='DRAFT') enforcing it at the DB layer; service now has `orderBy: createdAt desc` + retry on P2002 |
+| `getOrCreateDraft`/`revertToVersion` returned an empty `image.url` (hero) because it wasn't enriched from Media | Fixed | `PageVersionsService` injects `BlocksService` and calls `enrichBlockData()` before returning blocks — see `apps/admin-api/AGENTS.md` |
+| `packages/block-registry`: the Editor component is split out of `registry.ts`, living in `src/editors.ts` (subpath `@cms/block-registry/editors`) | Current | Don't read `getBlockDefinition(type).Editor` anymore — use `getBlockEditor(type)`. Details + checklist for adding a block: `packages/block-registry/AGENTS.md` |
+| `@types/react`/`@types/react-dom` must be pinned to the exact same version, matching root `pnpm.overrides` | Current | A version mismatch (even same major) causes JSX errors across the whole app even though `tsc` in the sub-package reports nothing. Details: `packages/block-registry/AGENTS.md` |
 
 ---
 
@@ -118,18 +118,24 @@ See `packages/block-registry/AGENTS.md` for full 6-step checklist. TL;DR:
 - `publishedVersionId` = pointer to published version, change it to publish (don't mutate version in place)
 - `Page.title` is unversioned (internal name), `PageVersion.seoMeta.title` is versioned (public SEO title)
 - DRAFT version can be deleted; deleting DRAFT clears all blocks via cascade
+- `GET /pages` filters by `templateId`: **no `templateId` in query → static pages only**
+  (`templateId IS NULL`); `templateId=<uuid>` → pages of that template only. There is no
+  "all pages regardless of template" mode — each Sidebar nav item (`Pages` vs each template)
+  maps to exactly one `templateId` value, never omitted client-side arbitrarily. `CreatePageModal`
+  respects the same context: opened from a template tab, its template select is pre-filled and
+  locked to that `templateId`.
 
-### Pages & Versions (bổ sung)
-- **Tối đa 1 DRAFT/page được enforce ở DB** bằng partial unique index
-  (`page_versions_one_draft_per_page`, `WHERE status = 'DRAFT'`), không chỉ dựa vào logic
-  application. Nếu cần thao tác tạo DRAFT ở bất kỳ chỗ nào mới, luôn dùng
-  `PageVersionsService.getOrCreateDraft()` (đã có retry khi thua race), **không** tự viết
-  `create` DRAFT mới mà không check `existing` trước + không bắt lỗi P2002.
-- Mọi hàm trả `PageVersion.blocks` ra ngoài API (`getOrCreateDraft`, `revertToVersion`,
-  `cloneVersionIntoNewDraft`) phải đi qua `enrichVersionBlocks()` (gọi
-  `BlocksService.enrichBlockData()`) để `hero.image.url` được resolve từ `mediaId` — nếu quên,
-  block hero sẽ "mất ảnh" khi vừa vào Edit Mode cho tới khi user tự chọn lại ảnh (từng là bug
-  thật, xem `ARCHITECTURE-DESIGN.md` mục Live Edit Mode).
+### Pages & Versions (additional notes)
+- **Max 1 DRAFT/page is enforced at the DB layer** via a partial unique index
+  (`page_versions_one_draft_per_page`, `WHERE status = 'DRAFT'`), not just application logic. If
+  you need to create a DRAFT anywhere new, always use `PageVersionsService.getOrCreateDraft()`
+  (already has retry-on-race handling) — **never** hand-write a `create` DRAFT call without
+  checking for an `existing` one first and catching P2002.
+- Any function that returns `PageVersion.blocks` out through the API (`getOrCreateDraft`,
+  `revertToVersion`, `cloneVersionIntoNewDraft`) must go through `enrichVersionBlocks()` (which
+  calls `BlocksService.enrichBlockData()`) so `hero.image.url` gets resolved from `mediaId` — if
+  you skip this, the hero block "loses its image" right after entering Edit Mode until the user
+  re-picks the image (this was a real bug — see `ARCHITECTURE-DESIGN.md`, Live Edit Mode section).
 
 ### Media
 - Recursive usage check: deleting media scans ALL blocks in ALL versions (DRAFT/PUBLISHED/ARCHIVED) for `mediaId` references

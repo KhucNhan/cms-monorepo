@@ -23,6 +23,11 @@ const ALL_PERMISSIONS = [
   { resource: 'role',  action: 'read'    },
   { resource: 'role',  action: 'update'  },
   { resource: 'role',  action: 'delete'  },
+  // ── mới: quản lý template ──
+  { resource: 'template', action: 'create' },
+  { resource: 'template', action: 'read'   },
+  { resource: 'template', action: 'update' },
+  { resource: 'template', action: 'delete' },
 ] as const;
 
 // ── Mapping role → permissions ───────────────────────────
@@ -38,10 +43,12 @@ const ROLE_PERMISSIONS: Record<string, Array<{ resource: string; action: string 
     // ── mới: theo yêu cầu "editor view-only users list, view editor's permissions" ──
     { resource: 'user',  action: 'read'    },
     { resource: 'role',  action: 'read'    },
+    { resource: 'template', action: 'read' },
   ],
   viewer: [
     { resource: 'page',  action: 'read'    },
     { resource: 'media', action: 'read'    },
+    { resource: 'template', action: 'read' },
   ],
 };
 
@@ -101,7 +108,7 @@ async function main() {
 
   // ── 4. Sample homepage ──────────────────────────────────
   console.log('\n📄 Creating sample homepage...');
-  const existing = await prisma.page.findUnique({ where: { slug: 'homepage' } });
+const existing = await prisma.page.findFirst({ where: { slug: 'homepage', templateId: null } });
 
   if (!existing) {
     await prisma.page.create({

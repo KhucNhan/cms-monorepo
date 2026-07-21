@@ -12,8 +12,8 @@
 | Never render HTML | JSON responses only | A task to "make a block look nicer" does not belong in this app |
 | Publish = flip the pointer | `pages.publishedVersionId` | Never UPDATE the currently PUBLISHED version directly |
 | No Passport Guards for Google OAuth callback | `GET /auth/google` and `GET /auth/google/callback` are handled manually in `AuthController`/`AuthService` (redirect + `axios` code exchange) — **not** `@UseGuards(AuthGuard('google'))` | Passport's guard integration is Express-oriented and breaks under this app's Fastify adapter (hangs / 500s). See Section 10. |
-| Mọi hàm trả `PageVersion.blocks` ra API phải enrich qua `BlocksService.enrichBlockData()` | `PageVersionsService.enrichVersionBlocks()` | Quên bước này khiến `hero.image.url` rỗng dù đã chọn ảnh — chỉ có `mediaId` |
-| Tối đa 1 DRAFT/page — enforce ở DB, không chỉ ở code | Partial unique index `page_versions_one_draft_per_page` | Tạo DRAFT phải qua `getOrCreateDraft()` (có retry P2002), không viết `create` DRAFT tay ở chỗ khác |
+| Any function returning `PageVersion.blocks` through the API must enrich via `BlocksService.enrichBlockData()` | `PageVersionsService.enrichVersionBlocks()` | Skipping this leaves `hero.image.url` empty even though an image was chosen — only `mediaId` is set |
+| Max 1 DRAFT/page — enforced at the DB layer, not just in code | Partial unique index `page_versions_one_draft_per_page` | Creating a DRAFT must go through `getOrCreateDraft()` (has P2002 retry) — never hand-write a `create` DRAFT call elsewhere |
 
 ## 2. Media Usage Check
 
@@ -27,27 +27,45 @@
 
 ## 2.1 Page Draft Creation — Race Condition Fix
 
-- `PageVersionsService.getOrCreateDraft(pageId, userId)` là **entry point duy nhất** để lấy/tạo
-  DRAFT cho Live Edit Mode (`POST /pages/:id/draft`). Trước đây có 2 lỗi đã fix:
-  1. **Thiếu `orderBy`** khi tìm DRAFT hiện có → nếu do race condition có >1 DRAFT tồn tại, có
-     thể trả nhầm bản cũ/stale. Đã thêm `orderBy: { createdAt: 'desc' }`.
-  2. **Không chống race condition**: nếu 2 request gọi gần như đồng thời (ví dụ React Strict
-     Mode double-invoke effect ở `apps/web`), cả 2 đều thấy "chưa có DRAFT" rồi cùng tạo mới →
-     2 DRAFT cho cùng 1 page.
-- **Fix ở tầng DB** (đáng tin cậy nhất, migration `..._one_draft_per_page`):
+- `PageVersionsService.getOrCreateDraft(pageId, userId)` is the **single entry point** for
+  fetching/creating a DRAFT for Live Edit Mode (`POST /pages/:id/draft`). Two bugs were fixed here:
+  1. **Missing `orderBy`** when looking up an existing DRAFT → if a race condition had already
+     produced >1 DRAFT, this could return the wrong/stale one. Fixed by adding
+     `orderBy: { createdAt: 'desc' }`.
+  2. **No race-condition guard**: if 2 requests fire almost simultaneously (e.g. React Strict
+     Mode's double-invoked effect in `apps/web`), both would see "no DRAFT yet" and both create
+     one → 2 DRAFTs for the same page.
+- **Fix at the DB layer** (most reliable, migration `..._one_draft_per_page`):
 ```sql
   CREATE UNIQUE INDEX "page_versions_one_draft_per_page"
   ON "page_versions" ("pageId")
   WHERE status = 'DRAFT';
 ```
-  `getOrCreateDraft()` bọc `cloneVersionIntoNewDraft()` bằng try/catch, bắt
-  `Prisma.PrismaClientKnownRequestError` code `P2002` — khi thua race, refetch lại bản DRAFT vừa
-  được request khác tạo, thay vì để lỗi 500 văng ra ngoài.
-- ⚠️ Nếu migration báo lỗi `P3018`/`23505` khi apply lần đầu, nghĩa là DB **đã có sẵn** page với
-  >1 DRAFT (dữ liệu cũ trước khi có fix). Cần dọn dữ liệu (giữ lại DRAFT mới nhất mỗi page) trước
-  khi áp index — xem script dọn dẹp trong lịch sử PR/agent-session liên quan, không tự ý xóa DRAFT
-  hàng loạt mà không kiểm tra thủ công trước (2 DRAFT trùng có thể có nội dung khác nhau, không
-  phải lúc nào bản mới nhất cũng là bản "đúng").
+  `getOrCreateDraft()` wraps `cloneVersionIntoNewDraft()` in a try/catch, catching
+  `Prisma.PrismaClientKnownRequestError` code `P2002` — on losing the race, it refetches the DRAFT
+  the other request just created instead of letting a 500 bubble out.
+- ⚠️ If a migration reports `P3018`/`23505` on first apply, it means the DB **already has** a page
+  with >1 DRAFT (old data predating the fix). Clean up the data (keep the newest DRAFT per page)
+  before applying the index — see the cleanup script in the related PR/agent-session history; do
+  not bulk-delete DRAFTs without manually checking first (two duplicate DRAFTs can have different
+  content — the newest one isn't always the "correct" one).
+
+## 2.2 Template Autofill — fixed rule, not client-configurable
+
+`autoFillMap` on `TemplatePlaceholder` is **no longer accepted from the client**
+(`setPlaceholdersSchema` has no `autoFillMap` field). `TemplatesService.setPlaceholders()`
+derives it server-side with a single fixed rule: placeholder `type === 'hero'` →
+`{ title: 'page.title' }`; every other type → `undefined` (no autofill).
+
+**Why removed**: the previous design let admin-web offer a dropdown mapping ANY block field
+(including array/object fields like `faq.items: FaqItem[]`) to a string source
+(`page.title`/`page.slug`). This crashed `PagesService.create()` with an unhandled `ZodError`
+(500) whenever `items` got mapped to a string — `resolveAutoFill()` had no field-type check.
+Rather than keep validating an open-ended client input, autofill was simplified to the one rule
+actually needed in product. If a future task asks for other autofill mappings, that's a deliberate
+feature re-add — re-introduce `resolveAutoFill()`'s type-guard (`typeof existing !== 'string' →
+skip`, see `template-autofill.util.ts`) AND client-side validation together, don't repeat the
+unguarded-client-input mistake.
 
 ## 3. Page Version Endpoints
 
@@ -75,6 +93,19 @@
   `seoMeta`, which only applies after Publish). This is an intentional tradeoff. If a future task
   requires `title` to be versioned like `seoMeta`, that is an **architecture change** (move
   `title` to `PageVersion`), not a bugfix.
+
+## 4.1 `GET /pages` — filter by `templateId`
+
+- `listPagesSchema` has an optional `templateId` (uuid). `PagesService.findAll()` always applies
+  `where.templateId = params.templateId ?? null` — **never** omits the field from `where`. Using
+  `undefined` instead of `null` would make Prisma skip the filter entirely and return pages across
+  all templates mixed together — this was a real bug (Sidebar linked to
+  `/content-management?templateId=X` but the endpoint ignored the param, so every template's pages
+  and static pages rendered in the same table, all clickable regardless of the active tab).
+- Consequence: there is no single "list every page regardless of template" mode via this endpoint.
+  If a future task needs that, it's a new query param (e.g. `templateId=all`), not a change to the
+  default behavior — default must stay `null` (static pages only) to match the Sidebar's "Pages"
+  item.
 
 ## 5. RBAC — Roles & Permissions (`modules/roles/`)
 
@@ -158,10 +189,11 @@ Every raster upload produces **3 variants**, all converted to **WebP** with **me
 - `rename()`/`delete()` are kept in sync across all 3 variants — no orphaned variant files left
   behind.
 - Install: `pnpm --filter admin-api add sharp`.
-- `BlocksService.enrichBlockData(type, data)` (đang `public`, không phải `private`) được tái sử
-  dụng bởi `PageVersionsService` (`enrichVersionBlocks()`) để resolve `hero.image.url` cho mọi
-  endpoint trả về `PageVersion.blocks`, không chỉ `GET /blocks`. Nếu thêm endpoint mới trả blocks
-  ra ngoài, luôn nhớ enrich — quên bước này là nguyên nhân bug "ảnh biến mất khi vào Edit Mode".
+- `BlocksService.enrichBlockData(type, data)` (currently `public`, not `private`) is reused by
+  `PageVersionsService` (`enrichVersionBlocks()`) to resolve `hero.image.url` for every endpoint
+  that returns `PageVersion.blocks`, not just `GET /blocks`. If you add a new endpoint that returns
+  blocks, always remember to enrich — forgetting this is the cause of the "image disappears when
+  entering Edit Mode" bug.
 
 ## 7. Common commands
 
@@ -202,21 +234,22 @@ root, this is the cause. Always call `pnpm --filter admin-api prisma:migrate` di
   `/auth/google/callback` without re-verifying the Fastify issue is actually resolved — see
   Section 10.
 
-## Known gap: Rename media không tự sync `url` đã lưu cứng trong `Block.data`
+## Known gap: renaming media does not sync the `url` already baked into `Block.data`
 
-`MediaService.rename()` chỉ cập nhật `Media.url`/`key` trong bảng `media` — KHÔNG quét/update
-ngược các `Block.data` (JSONB) đang tham chiếu `mediaId` đó. Vì `hero.image` lưu cả `{ mediaId, url }`
-(không chỉ `mediaId`) tại thời điểm admin chọn ảnh trong `MediaPicker`, sau khi rename, `url` cũ
-trong `Block.data` bị stale — hiển thị lỗi 404 trên `apps/web` dù `Media.url` trong DB đã đúng.
+`MediaService.rename()` only updates `Media.url`/`key` in the `media` table — it does NOT
+scan/update the `Block.data` (JSONB) rows that reference that `mediaId`. Because `hero.image`
+stores both `{ mediaId, url }` (not just `mediaId`) at the moment an admin picks the image in
+`MediaPicker`, after a rename the old `url` in `Block.data` goes stale — showing a 404 on
+`apps/web` even though `Media.url` in the DB is correct.
 
-**Workaround hiện tại**: mở lại page bị ảnh hưởng trong admin-web → chọn lại ảnh trong
-BlockDataForm → Save Draft → Publish, để `url` được ghi đè bằng giá trị mới.
+**Current workaround**: reopen the affected page in admin-web → re-pick the image in
+`BlockDataForm` → Save Draft → Publish, so `url` gets overwritten with the new value.
 
-**Fix triệt để (chưa làm — flag cho task sau)**: sau khi `rename()`, chạy `findUsages(mediaId)`
-(logic đã có sẵn, dùng bởi delete-usage-check) để tìm mọi block đang tham chiếu, rồi cập nhật
-`url` trong `Block.data` của các block đó ngay trong cùng transaction. Cần cẩn thận: chỉ patch
-`url`, không đổi `mediaId`, và phải validate lại qua Zod schema của block đó trước khi ghi (giống
-cách `stripMediaReference()` làm khi delete).
+**Proper fix (not done yet — flag for a future task)**: after `rename()`, run `findUsages(mediaId)`
+(logic already exists, used by the delete-usage-check) to find every referencing block, then update
+`url` in those blocks' `Block.data` within the same transaction. Be careful: only patch `url`, never
+change `mediaId`, and re-validate against that block's Zod schema before writing (the same way
+`stripMediaReference()` does on delete).
 
 ## 9. CORS for multi-subdomain deployment
 
@@ -283,11 +316,11 @@ Google login links the account. Migration: `add_google_oauth_fields`.
 (used only by the inert `GoogleStrategy`, kept as reference — see Section 8 gap note); the actual
 runtime flow's only new dependency is `axios`.
 
-## 11. Test — chủ đích tối giản (không phải thiếu sót)
+## 11. Tests — deliberately minimal (not an oversight)
 
-Chỉ giữ 3 test bảo vệ đúng những invariant có hậu quả nghiêm trọng nhất nếu vi phạm:
-`page-versions.service.spec.ts` (publish không mutate published version — 1.5),
-`auth.service.spec.ts` (Google OAuth existing-users-only — Section 8),
-`test/rbac.e2e-spec.ts` (mọi route đều cần permission — Section 5). Đây là quyết định
-có chủ đích để giảm chi phí maintain ở quy mô team hiện tại — không tự ý mở rộng thêm
-test cho các module khác (users, roles, media CRUD cơ bản) trừ khi được yêu cầu rõ ràng.
+Only 3 tests are kept, each guarding the invariant with the most severe consequence if violated:
+`page-versions.service.spec.ts` (publish must not mutate the published version — Section 1.5),
+`auth.service.spec.ts` (Google OAuth existing-users-only — Section 8), and
+`test/rbac.e2e-spec.ts` (every route requires a permission — Section 5). This is a deliberate
+decision to keep maintenance cost low at the team's current size — don't unilaterally add more
+tests for other modules (users, roles, basic media CRUD) unless explicitly requested.

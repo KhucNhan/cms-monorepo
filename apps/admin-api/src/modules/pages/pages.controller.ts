@@ -40,8 +40,11 @@ export class PagesController {
 
   @Get()
   @RequirePermissions('page:read')
-  @ApiOperation({ summary: 'List all pages (paginated)' })
-  findAll(@Query(new ZodValidationPipe(listPagesSchema)) query: { page: number; pageSize: number; search?: string }) {
+  @ApiOperation({ summary: 'List all pages (paginated), optionally filtered by template' })
+  findAll(
+    @Query(new ZodValidationPipe(listPagesSchema))
+    query: { page: number; pageSize: number; search?: string; templateId?: string },
+  ) {
     return this.pagesService.findAll(query);
   }
 

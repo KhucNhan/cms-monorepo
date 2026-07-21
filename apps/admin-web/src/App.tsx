@@ -10,9 +10,9 @@ import { UsersManagementPage } from '@/pages/users/UsersManagementPage';
 import { AuthProvider } from '@/context/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { RolesPage } from '@/pages/roles/RolesPage';
+import { TemplatesPage } from '@/pages/templates/TemplatesPage';
+import { AppShell } from '@/components/layout/AppShell';
 
-// AuthProviderWrapper ensures AuthProvider runs inside the Router context
-// so that useAuth's useNavigate works correctly!
 function AuthProviderWrapper() {
   return (
     <AuthProvider>
@@ -25,36 +25,31 @@ const router = createBrowserRouter([
   {
     element: <AuthProviderWrapper />,
     children: [
-      {
-        path: '/login',
-        element: <LoginPage />,
-      },
-      {
-        // Public route — must be outside ProtectedRoute so it can exchange
-        // the Google token before the user is authenticated
-        path: '/auth/callback',
-        element: <GoogleCallbackPage />,
-      },
+      { path: '/login', element: <LoginPage /> },
+      { path: '/auth/callback', element: <GoogleCallbackPage /> },
       {
         element: <ProtectedRoute />,
         children: [
-          { path: '/dashboard', element: <DashboardPage /> },
-          { path: '/content-management', element: <ContentManagementPage /> },
-          { path: '/pages/:pageId/edit', element: <PageEditPage /> },
-          { path: '/block-gallery', element: <ContentTypeBuilderPage /> },
-          { path: '/media-library', element: <MediaLibraryPage /> },
-          { path: '/users', element: <UsersManagementPage /> },
-          { path: '/roles', element: <RolesPage /> },
+          {
+            // AppShell mounts Sidebar/TopNav exactly ONCE for this whole
+            // group — fixes Sidebar remounting (and its template list
+            // flickering) on every navigation between these routes.
+            element: <AppShell />,
+            children: [
+              { path: '/dashboard', element: <DashboardPage /> },
+              { path: '/content-management', element: <ContentManagementPage /> },
+              { path: '/pages/:pageId/edit', element: <PageEditPage /> },
+              { path: '/block-gallery', element: <ContentTypeBuilderPage /> },
+              { path: '/media-library', element: <MediaLibraryPage /> },
+              { path: '/users', element: <UsersManagementPage /> },
+              { path: '/roles', element: <RolesPage /> },
+              { path: '/templates', element: <TemplatesPage /> },
+            ],
+          },
         ],
       },
-      {
-        path: '/',
-        element: <Navigate to="/dashboard" replace />,
-      },
-      {
-        path: '*',
-        element: <Navigate to="/dashboard" replace />,
-      },
+      { path: '/', element: <Navigate to="/dashboard" replace /> },
+      { path: '*', element: <Navigate to="/dashboard" replace /> },
     ],
   },
 ]);

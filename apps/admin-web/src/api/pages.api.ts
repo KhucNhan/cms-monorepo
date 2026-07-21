@@ -17,6 +17,7 @@ export interface PagesListParams {
   page?: number;
   pageSize?: number;
   search?: string;
+  templateId?: string;
 }
 
 // ─── Pages API ────────────────────────────────────────────────────────────────
@@ -28,9 +29,10 @@ export const pagesApi = {
    */
   getAll: (params: PagesListParams = {}) => {
     const qs = new URLSearchParams();
-    if (params.page)     qs.set('page',     String(params.page));
-    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
-    if (params.search)   qs.set('search',   params.search);
+    if (params.page)       qs.set('page',       String(params.page));
+    if (params.pageSize)   qs.set('pageSize',   String(params.pageSize));
+    if (params.search)     qs.set('search',     params.search);
+    if (params.templateId) qs.set('templateId', params.templateId);
     const query = qs.toString() ? `?${qs}` : '';
     return apiClient.get<PagesListResponse>(`/pages${query}`);
   },
@@ -46,7 +48,7 @@ export const pagesApi = {
    * POST /api/v1/pages
    * Tạo page mới (tự động tạo DRAFT version)
    */
-  create: (data: { slug: string; title?: string; seoMeta?: Record<string, unknown> }) =>
+  create: (data: { slug: string; title?: string; seoMeta?: Record<string, unknown>; templateId?: string }) =>
     apiClient.post<Page>('/pages', data),
 
   /**

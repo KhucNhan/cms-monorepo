@@ -17,6 +17,11 @@ enum VersionStatus {
   ARCHIVED
 }
 
+// NOTE: `ContentType` enum REMOVED (was BLOG | PROJECT).
+// Template no longer maps 1:1 to a fixed content type — a Template is now a
+// standalone layout definition, sitting alongside Page rather than being a
+// "kind of" Page.
+
 // ─────────────────────────────────────────────────────────
 // RBAC
 // ─────────────────────────────────────────────────────────
@@ -35,7 +40,7 @@ model Role {
 /// Ví dụ: { resource: "page", action: "publish" }
 model Permission {
   id       String @id @default(uuid())
-  resource String // "page" | "media" | "user"
+  resource String // "page" | "media" | "user" | "role" | "template"
   action   String // "create" | "read" | "update" | "delete" | "publish"
 
   rolePermissions RolePermission[]
@@ -61,10 +66,10 @@ model RolePermission {
 // ─────────────────────────────────────────────────────────
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
-  password     String  // bcrypt hash — mọi user đều có password; không có Google-only account
-  roleId       String
+  id       String @id @default(uuid())
+  email    String @unique
+  password String // bcrypt hash — mọi user đều có password; không có Google-only account
+  roleId   String
 
   // Google OAuth — set lần đầu khi user đăng nhập Google, null với user chưa link
   googleId    String? @unique  // Google "sub" claim
@@ -86,9 +91,19 @@ model User {
 
 model Page {
   id        String   @id @default(uuid())
-  slug      String   @unique
+  slug      String
   title     String   @default("")
   createdAt DateTime @default(now())
+
+  // Template (optional) — null = static page, no template.
+  // NOT NULL = this page uses the given Template's layout (placeholder blocks
+  // are resolved at read-time from TemplatePlaceholder + PlaceholderOverride,
+  // NOT copied into this page's own Block rows — "Cách hiểu A" design). This
+  // page can still freely CRUD its OWN Block rows (the "outlet" content); it
+  // can never see/edit/delete the template-owned placeholder blocks (hero,
+  // footer, etc.) because those never materialize as rows belonging to it.
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id])
 
   // Con trỏ sang version đang live (null = chưa publish lần nào)
   publishedVersionId String?      @unique
@@ -96,6 +111,17 @@ model Page {
 
   versions PageVersion[] @relation("PageVersions")
 
+  // Per-page overrides for template placeholder fields explicitly marked
+  // `overridableFields` in block-registry (e.g. hero.image). Only the
+  // overridable subset is stored here — never a full copy of the block.
+  placeholderOverrides PlaceholderOverride[]
+
+  // Static pages (templateId IS NULL) must have a globally unique slug.
+  // Pages under a template must have a unique slug WITHIN that template.
+  // Postgres treats multiple NULLs in a unique index as distinct, so this
+  // composite unique alone does NOT cover the templateId IS NULL case — a
+  // partial unique index is added via raw SQL in the migration file.
+  @@unique([templateId, slug], name: "page_template_slug_unique")
   @@map("pages")
 }
 
@@ -106,8 +132,8 @@ model PageVersion {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  pageId    String
-  page      Page   @relation("PageVersions", fields: [pageId], references: [id], onDelete: Cascade)
+  pageId String
+  page   Page @relation("PageVersions", fields: [pageId], references: [id], onDelete: Cascade)
 
   createdBy String
   creator   User   @relation(fields: [createdBy], references: [id])
@@ -136,13 +162,84 @@ model Block {
 }
 
 // ─────────────────────────────────────────────────────────
+// Templates
+// ─────────────────────────────────────────────────────────
+
+/// Template = một layout độc lập, KHÔNG phải "loại Page". Page trỏ tới Template
+/// qua Page.templateId (nullable) thay vì Template sở hữu Page.
+///
+/// slugPrefix được HỆ THỐNG TỰ SINH khi tạo Template — không cho admin nhập tay:
+///   slugPrefix = lowercase(name) + "s"   (vd name="Project" -> slugPrefix="projects")
+/// Dùng cho route công khai 2 cấp: /{slugPrefix}/{page.slug}  (vd /projects/agas)
+/// slugPrefix BẤT BIẾN sau khi tạo — sửa name không đổi slugPrefix (tránh gãy URL cũ).
+model Template {
+  id         String   @id @default(uuid())
+  name       String
+  slugPrefix String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  placeholders TemplatePlaceholder[]
+  pages        Page[]
+
+  @@map("templates")
+}
+
+/// Khai báo "layout này có 1 block loại X ở vị trí Y" — KHÔNG lưu data thật.
+/// Data thật được resolve tại read-time cho từng Page bằng:
+///   block-registry.defaultData  (ảnh mặc định, v.v.)
+///   + autoFillMap                (field lấy tự động từ Page, vd title)
+///   + PlaceholderOverride.data   (field admin tự sửa riêng theo từng page, vd ảnh Hero)
+/// Field nào được phép override do `getBlockDefinition(type).overridableFields`
+/// ở block-registry quyết định — KHÔNG lưu cột `editableFields` song song ở đây.
+model TemplatePlaceholder {
+  id         String @id @default(uuid())
+  type       String // "hero" | "faq" | "next-project" | ... — khớp block-registry type
+  orderIndex Int
+
+  /// vd: { "title": "page.title" } — key = field path trong block.data,
+  /// value = nguồn dữ liệu ("page.title" | "page.slug" | ...).
+  autoFillMap Json?
+
+  updatedAt DateTime @updatedAt
+
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  overrides PlaceholderOverride[]
+
+  @@index([templateId, orderIndex])
+  @@map("template_placeholders")
+}
+
+/// Override tối giản theo từng Page cho 1 placeholder cụ thể — CHỈ chứa các
+/// field nằm trong `overridableFields` của block-registry (vd ảnh Hero).
+/// Xóa TemplatePlaceholder ở Template => cascade xóa toàn bộ override liên
+/// quan — TemplatesService PHẢI đếm/liệt kê ảnh hưởng và xin xác nhận admin
+/// TRƯỚC khi xóa placeholder, không xóa âm thầm.
+model PlaceholderOverride {
+  id        String   @id @default(uuid())
+  data      Json     @default("{}") // vd { "image": { "mediaId": "...", "url": "..." } }
+  updatedAt DateTime @updatedAt
+
+  pageId String
+  page   Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  placeholderId String
+  placeholder   TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, placeholderId])
+  @@map("placeholder_overrides")
+}
+
+// ─────────────────────────────────────────────────────────
 // Media
 // ─────────────────────────────────────────────────────────
 
 model Media {
-  id       String  @id @default(uuid())
+  id       String @id @default(uuid())
   url      String
-  key      String  @unique   // object key trên S3/R2/local
+  key      String @unique   // object key trên S3/R2/local
   mimeType String
 
   detailKey String?
@@ -150,11 +247,11 @@ model Media {
   thumbKey  String?
   thumbUrl  String?
 
-  width    Int?
-  height   Int?
+  width  Int?
+  height Int?
 
-  altText  String?  // alt text cho SEO / accessibility
-  fileSize Int?     // kích thước file gốc user upload (bytes) — null với record cũ trước tính năng này
-  
+  altText  String? // alt text cho SEO / accessibility
+  fileSize Int?    // kích thước file gốc user upload (bytes) — null với record cũ trước tính năng này
+
   @@map("media")
 }

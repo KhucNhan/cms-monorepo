@@ -4,7 +4,11 @@
             ├── turbo-build.log
         └── 📁src
             └── 📁blocks
+                └── 📁content-outlet
+                    ├── index.ts
+                    ├── schema.ts
                 └── 📁faq
+                    ├── Editor.tsx
                     ├── index.d.ts
                     ├── index.js
                     ├── index.js.map
@@ -14,6 +18,7 @@
                     ├── schema.js.map
                     ├── schema.ts
                 └── 📁hero
+                    ├── Editor.tsx
                     ├── index.d.ts
                     ├── index.js
                     ├── index.js.map
@@ -21,16 +26,21 @@
                     ├── schema.d.ts
                     ├── schema.js
                     ├── schema.js.map
+                    ├── schema.ts
+                └── 📁next-project
+                    ├── index.ts
                     ├── schema.ts
                 └── 📁rich-text
+                    ├── Editor.tsx
                     ├── index.d.ts
                     ├── index.js
                     ├── index.js.map
                     ├── index.ts
+                    ├── rich-text.utils.ts
                     ├── schema.d.ts
                     ├── schema.js
                     ├── schema.js.map
-                    ├── schema.ts
+                    └── schema.ts
             ├── index.ts
             ├── registry.d.ts
             ├── registry.js

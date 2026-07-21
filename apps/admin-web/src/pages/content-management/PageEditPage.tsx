@@ -1,18 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { Button } from '@/components/ui/Button';
 import { ToastContainer, useToast } from '@/components/ui/Toast';
 import { pagesApi } from '@/api/pages.api';
 import { pageVersionsApi } from '@/api/page-versions.api';
 import { blocksApi } from '@/api/blocks.api';
+import { templatesApi } from '@/api/templates.api';
 import { ApiClientError } from '@/api/client';
-
+import { invalidatePagesCache } from '@/hooks/usePages';
 import { BlockPickerModal } from './BlockPickerModal';
 import { BlockSectionCard } from './components/BlockSectionCard';
 import { UnsavedChangesModal } from './components/UnsavedChangesModal';
 import { Can } from '@/components/Can';
-import type { PageDetail, Block, PageVersion } from '@/types';
+import type { PageDetail, Block, PageVersion, Template } from '@/types';
+
+// Placeholder block types — block dùng làm placeholder trong template, không phải outlet block tự do
+const PLACEHOLDER_TYPES = new Set(['hero', 'faq']);
 
 export function PageEditPage() {
   const { pageId } = useParams<{ pageId: string }>();
@@ -39,6 +43,10 @@ export function PageEditPage() {
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
   const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
   const [dragOverBlockIndex, setDragOverBlockIndex] = useState<number | null>(null);
+
+  // ─── Template state ────────────────────────────────────────────────────────
+  const [pageTemplate, setPageTemplate] = useState<Template | null>(null);
+  const [isTemplateOpen, setIsTemplateOpen] = useState(true);
 
   // ─── Page Info (title + slug) & SEO (title/description) — 2 section riêng ──
   const [titleInput, setTitleInput] = useState('');
@@ -124,6 +132,19 @@ export function PageEditPage() {
       setOriginalSlug(pageData.slug);
       setOriginalMetaTitle(seoMeta.title ?? '');
       setOriginalMetaDescription(seoMeta.description ?? '');
+
+      // Load template nếu page có templateId
+      if (pageData.templateId) {
+        try {
+          const template = await templatesApi.getOne(pageData.templateId);
+          setPageTemplate(template);
+        } catch (templateErr) {
+          console.warn('Failed to load page template:', templateErr);
+          setPageTemplate(null);
+        }
+      } else {
+        setPageTemplate(null);
+      }
     } catch (err) {
       console.error(err);
       const msg = err instanceof ApiClientError ? err.message : 'Initialization failed.';
@@ -426,6 +447,7 @@ export function PageEditPage() {
       }
 
       await pagesApi.publish(page.id, versionIdToPublish);
+      invalidatePagesCache();
       addToast('Page published live to public website successfully!', 'success');
       await initializePage();
     } catch (err) {
@@ -447,6 +469,7 @@ export function PageEditPage() {
     setIsReverting(true);
     try {
       await pageVersionsApi.revert(pendingRevertVersion.id);
+      invalidatePagesCache();
       setPendingRevertVersion(null);
       setShowHistory(false);
       await initializePage();
@@ -470,6 +493,7 @@ export function PageEditPage() {
     setIsDeletingVersion(true);
     try {
       await pageVersionsApi.deleteVersion(pendingDeleteVersion.id);
+      invalidatePagesCache();
       setPendingDeleteVersion(null);
       await initializePage();
       addToast('Version deleted successfully.', 'info');
@@ -488,12 +512,13 @@ export function PageEditPage() {
     setIsDiscardingDraft(true);
     try {
       await pageVersionsApi.deleteDraft(currentVersion.id);
+      invalidatePagesCache();
       setShowDiscardDraftConfirm(false);
       await initializePage();
-      addToast('Đã quay về bản đang publish.', 'success');
+      addToast('Reverted to the current publication version.', 'success');
     } catch (err) {
       console.error(err);
-      const msg = err instanceof ApiClientError ? err.message : 'Thao tác thất bại. Vui lòng thử lại.';
+      const msg = err instanceof ApiClientError ? err.message : 'Revert failed. Please try again.';
       addToast(msg, 'error');
     } finally {
       setIsDiscardingDraft(false);
@@ -520,36 +545,111 @@ export function PageEditPage() {
     blocker.reset();
   };
 
-  // ─── Render Loading / Error States ────────────────────────────────────────
-  if (loading && blocks.length === 0) {
-    return (
-      <AppLayout title="Content Management" >
-        <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
-          <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Loading Page Editor…
-        </div>
-      </AppLayout>
+  // ─── Template-derived computed state ──────────────────────────────────────
+  // placeholderBlocks: blocks that match a non-outlet template placeholder (keyed by type)
+  // outletBlocks: all other blocks — free-form content zone
+  const { placeholderBlocks, outletBlocks } = useMemo(() => {
+    if (!pageTemplate || !pageTemplate.placeholders) {
+      return { placeholderBlocks: new Map<string, Block>(), outletBlocks: blocks };
+    }
+    const nonOutletTypes = new Set(
+      pageTemplate.placeholders.filter((p) => p.type !== 'content-outlet').map((p) => p.type),
     );
-  }
-
-  if (error || !page) {
-    return (
-      <AppLayout title="Content Management" breadcrumb={{ label: 'Pages', highlight: 'Error' }}>
-        <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
-          <span className="material-symbols-outlined text-[48px] text-error">error</span>
-          <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
-          <Button variant="secondary" onClick={() => navigate('/content-management')}>
-            Back to Pages
-          </Button>
-        </div>
-      </AppLayout>
-    );
-  }
+    const implementedMap = new Map<string, Block>();
+    const outlet: Block[] = [];
+    for (const block of blocks) {
+      if (nonOutletTypes.has(block.type) && !implementedMap.has(block.type)) {
+        implementedMap.set(block.type, block);
+      } else {
+        // Orphan placeholder blocks are hidden from outlet (shown as info strip instead)
+        if (!PLACEHOLDER_TYPES.has(block.type) || nonOutletTypes.has(block.type)) {
+          outlet.push(block);
+        }
+      }
+    }
+    return { placeholderBlocks: implementedMap, outletBlocks: outlet };
+  }, [blocks, pageTemplate]);
 
   const isDraftStatus = currentVersion?.status === 'DRAFT';
+
+    useAppLayoutHeader(
+    loading && blocks.length === 0
+      ? { title: 'Content Management' }
+      : error || !page
+      ? { title: 'Content Management', breadcrumb: { label: 'Pages', highlight: 'Error' } }
+      : {
+          title: 'Content Management',
+          // breadcrumb={{ label: 'Pages', highlight: `/${page.slug} [...]` }} — giữ comment-out như bản gốc
+          actions: (
+            <div className="flex items-center gap-sm">
+              <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
+                Back
+              </Button>
+              <Button variant="ghost" icon="history" onClick={() => setShowHistory((v) => !v)}>
+                History
+              </Button>
+              {isDraftStatus && page?.publishedVersion && (
+                <Button
+                  variant="ghost"
+                  icon="undo"
+                  onClick={() => setShowDiscardDraftConfirm(true)}
+                  disabled={isDiscardingDraft || saving || publishing}
+                >
+                  Revert to Published
+                </Button>
+              )}
+              <Can permission="page:update">
+                <Button
+                  variant="secondary"
+                  icon="save"
+                  onClick={handleSave}
+                  disabled={!isDirty || saving || publishing}
+                  loading={saving}
+                >
+                  Save Draft
+                </Button>
+              </Can>
+              <Can permission="page:publish">
+                <Button
+                  variant="primary"
+                  icon="publish"
+                  onClick={handlePublish}
+                  disabled={saving || publishing || (!isDraftStatus && !isDirty)}
+                  loading={publishing}
+                >
+                  Publish Live
+                </Button>
+              </Can>
+            </div>
+          ),
+        },
+  );
+
+  // ─── Loading ───────────────────────────────────────────────────────────
+  if (loading && blocks.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-sm">
+        <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Loading Page Editor…
+      </div>
+    );
+  }
+
+  // ─── Error ─────────────────────────────────────────────────────────────
+  if (error || !page) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-on-surface-variant gap-md">
+        <span className="material-symbols-outlined text-[48px] text-error">error</span>
+        <p className="text-body-md text-error">{error ?? 'Page not found'}</p>
+        <Button variant="secondary" onClick={() => navigate('/content-management')}>
+          Back to Pages
+        </Button>
+      </div>
+    );
+  }
 
   // ─── Combine DRAFT / PUBLISHED / ARCHIVED into one list for the History panel ──
   // DRAFT and PUBLISHED always float to the top (so the user can see & track
@@ -578,59 +678,7 @@ export function PageEditPage() {
   });
 
   return (
-    <AppLayout
-      title="Content Management"
-      // breadcrumb={{
-        // label: 'Pages',
-        // highlight: `/${page.slug} [${currentVersion?.status ?? 'PUBLISHED'}]`,
-      // }}
-      actions={
-        <div className="flex items-center gap-sm">
-          <Button variant="ghost" icon="arrow_back" onClick={() => navigate('/content-management')}>
-            Back
-          </Button>
-          <Button
-            variant="ghost"
-            icon="history"
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            History
-          </Button>
-          {isDraftStatus && page?.publishedVersion && (
-            <Button
-              variant="ghost"
-              icon="undo"
-              onClick={() => setShowDiscardDraftConfirm(true)}
-              disabled={isDiscardingDraft || saving || publishing}
-            >
-              Revert to Published
-            </Button>
-          )}
-          <Can permission="page:update">
-            <Button
-              variant="secondary"
-              icon="save"
-              onClick={handleSave}
-              disabled={!isDirty || saving || publishing}
-              loading={saving}
-            >
-              Save Draft
-            </Button>
-          </Can>
-          <Can permission="page:publish">
-            <Button
-              variant="primary"
-              icon="publish"
-              onClick={handlePublish}
-              disabled={saving || publishing || (!isDraftStatus && !isDirty)}
-              loading={publishing}
-            >
-              Publish Live
-            </Button>
-          </Can>
-        </div>
-      }
-    >
+    <>
       <div className="p-xl">
         <div className="max-w-max_content_width mx-auto space-y-lg">
           
@@ -781,7 +829,67 @@ export function PageEditPage() {
             )}
           </div>
 
-          {/* Section 3: Page Sections (blocks) — header collapsible, Add Block ở cuối header,
+          {/* Section 3 (Template only): Template Layout Sections */}
+          {pageTemplate && pageTemplate.placeholders && (
+            <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsTemplateOpen((v) => !v)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsTemplateOpen((v) => !v); } }}
+                aria-expanded={isTemplateOpen}
+                className="flex items-center justify-between w-full cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-sm">
+                  <span className="material-symbols-outlined text-secondary text-[20px]">view_carousel</span>
+                  <h3 className="text-h4 font-semibold text-on-surface">Template: {pageTemplate.name}</h3>
+                  <span className="px-sm py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary uppercase">{pageTemplate.slugPrefix}</span>
+                </div>
+                <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
+                  {isTemplateOpen ? 'expand_less' : 'expand_more'}
+                </span>
+              </div>
+
+              {isTemplateOpen && (
+                <div className="flex flex-col gap-md">
+                  <p className="text-body-sm text-on-surface-variant">
+                    This page uses a template layout. Edit each placeholder block below. Free-form content goes in the <strong>Content Outlet</strong> section.
+                  </p>
+
+                  {pageTemplate.placeholders
+                    .filter((p) => p.type !== 'content-outlet')
+                    .map((placeholder) => {
+                      const block = placeholderBlocks.get(placeholder.type);
+                      return (
+                        <div key={placeholder.id}>
+                          {block ? (
+                            <BlockSectionCard
+                              block={block}
+                              index={0}
+                              totalBlocks={1}
+                              customLabel={`${placeholder.type.replace(/-/g, ' ')} (Template Placeholder)`}
+                              disableDelete={true}
+                              disableDrag={true}
+                              onUpdateData={(newData) => updateBlockData(block.id, newData)}
+                            />
+                          ) : (
+                            <div className="border-2 border-dashed border-outline-variant rounded-xl p-lg flex items-center gap-md text-on-surface-variant">
+                              <span className="material-symbols-outlined text-[28px] text-outline-variant">add_circle</span>
+                              <div className="flex-1">
+                                <p className="text-label-md font-bold capitalize">{placeholder.type.replace(/-/g, ' ')} Placeholder</p>
+                                <p className="text-body-sm">No block assigned yet. Add a <strong>{placeholder.type}</strong> block from the Page Sections below to fill this placeholder.</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section 4 (was 3): Page Sections (blocks) — header collapsible, Add Block ở cuối header,
               nội dung tự scroll bên trong thay vì kéo dài toàn trang khi mở rộng */}
           <div className="bg-surface rounded-xl border border-outline-variant shadow-sm p-lg flex flex-col gap-md">
             <div
@@ -798,9 +906,11 @@ export function PageEditPage() {
               className="flex items-center justify-between w-full gap-md cursor-pointer select-none"
             >
               <div className="flex items-center gap-sm min-w-0">
-                <h3 className="text-h4 font-semibold text-on-surface">Page Sections</h3>
+                <h3 className="text-h4 font-semibold text-on-surface">
+                  {pageTemplate ? 'Content Outlet' : 'Page Sections'}
+                </h3>
                 <span className="px-sm py-0.5 rounded-full text-label-sm font-bold bg-outline-variant/30 text-on-surface-variant flex-shrink-0">
-                  {blocks.length}
+                  {pageTemplate ? outletBlocks.length : blocks.length}
                 </span>
               </div>
 
@@ -826,14 +936,19 @@ export function PageEditPage() {
 
             {isBlocksOpen && (
               <div className="max-h-[65vh] overflow-y-auto pr-xs -mr-xs">
-                {blocks.length === 0 ? (
+                {/* When template is active, render only outlet blocks */}
+                {(pageTemplate ? outletBlocks : blocks).length === 0 ? (
                   <div className="flex flex-col items-center justify-center p-xl text-center border-2 border-dashed border-outline-variant rounded-xl bg-surface">
                     <span className="material-symbols-outlined text-[48px] text-outline-variant mb-md">
-                      view_stream
+                      {pageTemplate ? 'view_agenda' : 'view_stream'}
                     </span>
-                    <h4 className="text-h4 text-on-surface">No blocks in this page version</h4>
+                    <h4 className="text-h4 text-on-surface">
+                      {pageTemplate ? 'No content blocks yet' : 'No blocks in this page version'}
+                    </h4>
                     <p className="text-body-md text-on-surface-variant max-w-sm mb-lg mt-sm">
-                      Add blocks using the button below to start building the page layout.
+                      {pageTemplate
+                        ? 'Add free-form blocks here. They will appear inside the Content Outlet slot in your template.'
+                        : 'Add blocks using the button below to start building the page layout.'}
                     </p>
                     <Button variant="secondary" icon="add" onClick={() => setShowPicker(true)}>
                       Add First Block
@@ -841,12 +956,12 @@ export function PageEditPage() {
                   </div>
                 ) : (
                   <div className="space-y-lg">
-                    {blocks.map((block, idx) => (
+                    {(pageTemplate ? outletBlocks : blocks).map((block, idx) => (
                       <BlockSectionCard
                         key={block.id}
                         block={block}
                         index={idx}
-                        totalBlocks={blocks.length}
+                        totalBlocks={(pageTemplate ? outletBlocks : blocks).length}
                         isDragging={draggedBlockIndex === idx}
                         isDragOver={dragOverBlockIndex === idx && draggedBlockIndex !== null && draggedBlockIndex !== idx}
                         onDragStart={() => setDraggedBlockIndex(idx)}
@@ -1107,6 +1222,6 @@ export function PageEditPage() {
           </div>
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }

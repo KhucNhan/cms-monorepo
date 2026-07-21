@@ -10,3 +10,4 @@ export * from './src/registry';
 export { heroSchema, type HeroData } from './src/blocks/hero/schema';
 export { richTextSchema, type RichTextData } from './src/blocks/rich-text/schema';
 export { faqSchema, type FaqData } from './src/blocks/faq/schema';
+export { contentOutletSchema, type ContentOutletData } from './src/blocks/content-outlet/schema';

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppLayoutHeader } from '@/context/AppLayoutContext';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast, ToastContainer } from '@/components/ui/Toast';
 import { cn } from '@/config/cn';
@@ -63,12 +63,11 @@ const FIELD_TYPE_META: Record<FieldType, { icon: string; label: string; color: s
 
 export function ContentTypeBuilderPage() {
   const registryTypes = useMemo(() => buildTypesFromRegistry(), []);
-
-  const [types, setTypes]               = useState<ContentType[]>(registryTypes);
+  const [types, setTypes] = useState<ContentType[]>(registryTypes);
   const [activeTypeId, setActiveTypeId] = useState<string>(registryTypes[0]?.id ?? '');
   const [search, setSearch] = useState('');
   const [selectedField, setSelectedField] = useState<ContentField | null>(null);
-  const [dragId, setDragId]             = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
   const { toasts, addToast, removeToast } = useToast();
 
   const activeType = types.find((t) => t.id === activeTypeId);
@@ -81,13 +80,18 @@ export function ContentTypeBuilderPage() {
     );
   }, [search, types]);
 
+  useAppLayoutHeader({
+    title: 'Block Gallery',
+    actions: (
+      <SearchInput placeholder="Search blocks..." value={search} onChange={setSearch} />
+    ),
+  });
+
   if (!activeType) {
     return (
-      <AppLayout title="Block Gallery" >
         <div className="flex items-center justify-center h-full text-on-surface-variant">
           No block types registered.
         </div>
-      </AppLayout>
     );
   }
 
@@ -106,17 +110,7 @@ export function ContentTypeBuilderPage() {
   };
 
   return (
-    <AppLayout
-      title="Block Gallery"
-      // breadcrumb={{ label: 'Content-Type Builder', highlight: activeType.name }}
-      actions={
-        <SearchInput
-          placeholder="Search blocks..."
-          value={search}
-          onChange={setSearch}
-        />
-      }
-    >
+    <>
       <div className="flex h-[calc(100vh-64px)] overflow-hidden">
         {/* ── Left panel: Block Types list ── */}
         <nav className="w-64 border-r border-outline-variant bg-surface-container-lowest flex flex-col flex-shrink-0 overflow-y-auto custom-scrollbar">
@@ -186,7 +180,7 @@ export function ContentTypeBuilderPage() {
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </AppLayout>
+    </>
   );
 }
 
